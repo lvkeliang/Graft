@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func StartHeartbeat(ctx context.Context, pool node.NodesPool) {
+func StartAppendEntries(ctx context.Context, pool node.NodesPool) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -19,7 +19,7 @@ func StartHeartbeat(ctx context.Context, pool node.NodesPool) {
 			pool.Lock()
 			for _, conn := range pool.Conns {
 				conn.Write([]byte{})
-				//TODO: 创建一个heartbeat协议，发送heartbeat以及log
+				//TODO: 创建一个AppendEntries协议，发送heartbeat以及log
 			}
 			pool.Unlock()
 		}
