@@ -3,8 +3,8 @@ package protocol
 type RequestVote struct {
 	term         int64  //leader的term
 	candidateIP  string //candidate的IP
-	lastLogIndex int64
-	lastLogTerm  int64
+	lastLogIndex int64  //candidate最新的log的index
+	lastLogTerm  int64  //candidate最新的log的term
 }
 
 type RequestVoteResult struct {

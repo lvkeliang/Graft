@@ -17,10 +17,10 @@ type NodesPool struct {
 	Count int64
 }
 
-func (pool *NodesPool) Add(address string, conn net.Conn) {
+func (pool *NodesPool) Add(conn net.Conn) {
 	pool.Lock()
 	defer pool.Unlock()
-	pool.Conns[address] = conn
+	pool.Conns[conn.RemoteAddr().String()] = conn
 	pool.Count++
 }
 
@@ -33,27 +33,29 @@ func (pool *NodesPool) Get(address string) net.Conn {
 	return pool.Conns[address]
 }
 
-func (pool *NodesPool) Remove(address string, conn net.Conn) {
+func (pool *NodesPool) Remove(conn net.Conn) {
 	pool.Lock()
 	defer pool.Unlock()
-	delete(pool.Conns, address)
+	delete(pool.Conns, conn.RemoteAddr().String())
 	pool.Count--
 }
 
 type Node struct {
-	nodeID      int64
-	status      int64
-	currentTerm int64
-	voteFor     int64
+	NodeID      int64
+	Status      int64
+	CurrentTerm int64
+	VoteFor     string
 	ALLNode     NodesPool
 }
 
 func NewNode() *Node {
 	return &Node{
-		nodeID:      0,
-		status:      CANDIDATE,
-		currentTerm: 0,
-		voteFor:     0,
-		ALLNode:     NodesPool{},
+		NodeID:      0,
+		Status:      CANDIDATE,
+		CurrentTerm: 0,
+		VoteFor:     "",
+		ALLNode: NodesPool{
+			Conns: make(map[string]net.Conn),
+		},
 	}
 }
