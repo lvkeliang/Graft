@@ -1,12 +1,15 @@
 package node
 
 import (
+	"errors"
 	"net"
 	"sync"
 )
 
+type StateOfNode int64
+
 const (
-	LEADER = iota
+	LEADER StateOfNode = iota
 	CANDIDATE
 	FOLLOWER
 )
@@ -42,7 +45,7 @@ func (pool *NodesPool) Remove(conn net.Conn) {
 
 type Node struct {
 	NodeID      int64
-	Status      int64
+	Status      StateOfNode
 	CurrentTerm int64
 	VoteFor     string
 	ALLNode     NodesPool
@@ -51,11 +54,29 @@ type Node struct {
 func NewNode() *Node {
 	return &Node{
 		NodeID:      0,
-		Status:      CANDIDATE,
+		Status:      FOLLOWER,
 		CurrentTerm: 0,
 		VoteFor:     "",
 		ALLNode: NodesPool{
 			Conns: make(map[string]net.Conn),
 		},
 	}
+}
+
+func (node *Node) SetVoteFor(conn net.Conn) error {
+	if node.VoteFor != "" {
+		return errors.New("this term has already voted, if want to vote please update term")
+	}
+	node.VoteFor = conn.RemoteAddr().String()
+	return nil
+}
+
+func (node *Node) UpdateTerm(term int64) {
+	node.CurrentTerm = term
+	node.VoteFor = ""
+}
+
+func (node *Node) TermAddOne() {
+	node.CurrentTerm++
+	node.VoteFor = ""
 }

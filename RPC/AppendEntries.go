@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// 用于将收到的leaderHeartbeat传递给vote相关
+var leaderHeartbeat = make(chan int64)
+
 func StartAppendEntries(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogEntry) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -22,6 +25,9 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node, logEnt *LogEntry
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if myNode.Status != node.LEADER {
+				continue
+			}
 			myNode.ALLNode.Lock()
 			for ip, conn := range myNode.ALLNode.Conns {
 				//TODO: 创建一个AppendEntries协议，发送heartbeat以及log
@@ -56,42 +62,9 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node, logEnt *LogEntry
 	}
 }
 
-func Handle(conn net.Conn, myNode *node.Node) {
-	defer func(conn net.Conn) {
-		err := conn.Close()
-		if err != nil {
-			log.Println("[Handle] conn close error")
-			return
-		}
-	}(conn)
-
-	for {
-
-		// Read the first byte to determine the message type
-		msgType := make([]byte, 1)
-		_, err := conn.Read(msgType)
-		if err != nil {
-			log.Println("[Handle] Error reading message type:", err)
-			myNode.ALLNode.Remove(conn)
-			return
-		}
-
-		switch msgType[0] {
-		case 1:
-			// Handle AppendEntries message
-			AppendEntriesHandle(conn)
-		case 2:
-			AppendEntriesResultHandle(conn)
-		default:
-			log.Println("[Handle] Unknown message type:", msgType[0])
-		}
-	}
-
-}
-
-func AppendEntriesHandle(conn net.Conn) {
+func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 	// Read data from the connection
-	buf := make([]byte, 1024)
+	buf := make([]byte, length)
 	n, err := conn.Read(buf)
 	if err != nil {
 		log.Println("[AppendEntriesHandle] Error reading data:", err)
@@ -108,9 +81,15 @@ func AppendEntriesHandle(conn net.Conn) {
 		return
 	}
 
+	// 将收到的leaderHeartbeat传递给vote相关
+	// 更新自己的term到leader的term
+	leaderHeartbeat <- result.Term
+	//fmt.Printf("[AppendEntriesHandle] leader term: %v\n", result.Term)
+
 	res := protocol.NewAppendEntriesResult()
+
 	res.Success = true
-	res.Term = 1
+	res.Term = myNode.CurrentTerm
 	marshalRes, err := res.Marshal()
 	if err != nil {
 		log.Println("[AppendEntriesHandle] Error marshaling res:", err)
@@ -123,10 +102,10 @@ func AppendEntriesHandle(conn net.Conn) {
 	}
 }
 
-func AppendEntriesResultHandle(conn net.Conn) {
+func AppendEntriesResultHandle(conn net.Conn, length int) {
 
 	// Read data from the connection
-	buf := make([]byte, 1024)
+	buf := make([]byte, length)
 	n, err := conn.Read(buf)
 	if err != nil {
 		log.Println("[AppendEntriesResultHandle] Error reading data:", err)
@@ -143,7 +122,7 @@ func AppendEntriesResultHandle(conn net.Conn) {
 
 	// Process the result (e.g., update leader's term, handle success/failure)
 	if result.Success {
-		fmt.Println("[AppendEntriesResultHandle] Received successful AppendEntriesResult")
+		// fmt.Println("[AppendEntriesResultHandle] Received successful AppendEntriesResult")
 		// Update leader's term if needed
 	} else {
 		fmt.Println("[AppendEntriesResultHandle] Received failed AppendEntriesResult")

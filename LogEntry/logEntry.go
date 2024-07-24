@@ -19,10 +19,16 @@ type CommitIndex struct {
 	Idx  int64
 }
 
+type LastLog struct {
+	Term int64
+	Idx  int64
+}
+
 type LogEntry struct {
 	LogItem     LogItem
 	LastApplied lastApplied
 	CommitIndex CommitIndex
+	LastLog     LastLog
 	PrevLog     prevLog
 }
 

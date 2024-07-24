@@ -24,17 +24,20 @@ func NewAppendEntries() *AppendEntries {
 // Marshal AppendEntries 首字节标识为1
 func (ae *AppendEntries) Marshal() ([]byte, error) {
 	marshalAE, err := json.Marshal(ae)
-	modifiedData := make([]byte, len(marshalAE)+1)
+	modifiedData := make([]byte, len(marshalAE)+3)
 
 	// Set the first byte to indicate AppendEntries message type (00000001)
 	modifiedData[0] = 1
 
+	// 长度字节
+	copy(modifiedData[1:3], IntToBytes(len(marshalAE)))
+
 	// Copy the rest of the data from 'marshalAE' to 'modifiedData'
-	copy(modifiedData[1:], marshalAE)
+	copy(modifiedData[3:], marshalAE)
 	return modifiedData, err
 }
 
-// UNMarshal strae需要先去掉首字节
+// UNMarshal strae需要先去掉首字节(1字节)和长度字节(2字节)
 func (ae *AppendEntries) UNMarshal(strae []byte) error {
 	return json.Unmarshal(strae, ae)
 }
@@ -51,18 +54,21 @@ func NewAppendEntriesResult() *AppendEntriesResult {
 
 // Marshal 首字节标识为2
 func (aer *AppendEntriesResult) Marshal() ([]byte, error) {
-	marshalAE, err := json.Marshal(aer)
-	modifiedData := make([]byte, len(marshalAE)+1)
+	marshalAER, err := json.Marshal(aer)
+	modifiedData := make([]byte, len(marshalAER)+3)
 
 	// Set the first byte to indicate AppendEntries message type (00000001)
 	modifiedData[0] = 2
 
+	// 长度字节
+	copy(modifiedData[1:3], IntToBytes(len(marshalAER)))
+
 	// Copy the rest of the data from 'marshalAE' to 'modifiedData'
-	copy(modifiedData[1:], marshalAE)
+	copy(modifiedData[3:], marshalAER)
 	return modifiedData, err
 }
 
-// UNMarshal straer需要先去掉首字节
+// UNMarshal straer需要先去掉首字节(1字节)和长度字节(2字节)
 func (aer *AppendEntriesResult) UNMarshal(straer []byte) error {
 	return json.Unmarshal(straer, aer)
 }
