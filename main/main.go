@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lvkeliang/Graft/LogEntry"
 	"github.com/lvkeliang/Graft/RPC"
-	"github.com/lvkeliang/Graft/matchIndex"
-	"github.com/lvkeliang/Graft/nextIndex"
 	"github.com/lvkeliang/Graft/node"
 	"log"
 	"net"
@@ -15,34 +12,28 @@ import (
 )
 
 var myNode *node.Node
-var matchIdx *matchIndex.MatchIndex
-var nextIdx *nextIndex.NextIndex
-var logEnt *LogEntry.LogEntry
 
 func main() {
 
 	go func() {
-		err := StartServer(":256")
+		err := StartServer(":253")
 		if err != nil {
 			return
 		}
 	}()
 
+	Init([]string{"localhost:255", "localhost:256", "localhost:254"})
+
 	go inputNode()
 
 	go termWatcher()
-
-	Init([]string{"localhost:255", "localhost:254", "localhost:253"})
-	go RPC.StartElection(context.Background(), myNode, logEnt)
-	RPC.StartAppendEntries(context.Background(), myNode, logEnt)
+	go RPC.StartElection(context.Background(), myNode)
+	RPC.StartAppendEntries(context.Background(), myNode)
 
 }
 
 func Init(address []string) {
 	myNode = node.NewNode()
-	matchIdx = matchIndex.NewMatchIndex()
-	nextIdx = nextIndex.NewNextIndex()
-	logEnt = LogEntry.NewLogEntry()
 
 	for _, addr := range address {
 		conn, err := net.Dial("tcp", addr)
@@ -52,7 +43,7 @@ func Init(address []string) {
 		}
 
 		myNode.ALLNode.Add(conn)
-		go RPC.Handle(conn, myNode, logEnt)
+		go RPC.Handle(conn, myNode)
 	}
 }
 
@@ -77,7 +68,7 @@ func StartServer(port string) error {
 		// log.Printf("[server] serving to %v\n", ip)
 		// log.Printf("[server] nodes now: %v\n", myNode.ALLNode.Conns)
 
-		go RPC.Handle(conn, myNode, logEnt)
+		go RPC.Handle(conn, myNode)
 	}
 }
 
@@ -108,6 +99,6 @@ func inputNode() {
 		}
 
 		myNode.ALLNode.Add(conn)
-		go RPC.Handle(conn, myNode, logEnt)
+		go RPC.Handle(conn, myNode)
 	}
 }

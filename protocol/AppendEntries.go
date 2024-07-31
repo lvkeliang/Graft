@@ -8,13 +8,13 @@ import (
 // AppendEntries 心跳以及日志同步, 首字节标识为1
 type AppendEntries struct {
 	Term         int64  //Leader的term
-	LeaderIP     string //leader的IP
+	LeaderID     string //leader的IP
 	PrevLogIndex int64  //上一个log的index
 
-	PrevLogTerm int64            ////上一个log的term
-	Entries     LogEntry.LogItem //leader的log条目，可一次发送多个以提高效率
+	PrevLogTerm int64               ////上一个log的term
+	Entries     []LogEntry.LogEntry //leader的log条目，可一次发送多个以提高效率
 
-	LeaderCommit LogEntry.CommitIndex //Leader的commitIndex
+	LeaderCommit int64 //Leader的commitIndex
 }
 
 func NewAppendEntries() *AppendEntries {

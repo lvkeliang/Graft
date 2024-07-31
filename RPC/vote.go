@@ -3,7 +3,6 @@ package RPC
 import (
 	"context"
 	"fmt"
-	"github.com/lvkeliang/Graft/LogEntry"
 	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
@@ -24,8 +23,7 @@ func randomDuration(min, max int) time.Duration {
 }
 
 // StartElection 启动计时和发起选举请求的协程
-func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogEntry) {
-	electionTimer := time.NewTimer(randomDuration(1500, 2000)) // 5s 到 6s
+func StartElection(ctx context.Context, myNode *node.Node) {
 
 	// 用于取消选票的进程
 	var cancel context.CancelFunc
@@ -39,7 +37,7 @@ func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogE
 
 			// 上下文取消，停止选举过程
 			return
-		case <-electionTimer.C:
+		case <-myNode.ElectionTimer.C:
 			// 取消上一个收集选票进程
 			if cancel != nil {
 				cancel()
@@ -53,29 +51,30 @@ func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogE
 				fmt.Printf("节点转为 Candidate, 当前term: %v\n", myNode.CurrentTerm)
 
 				// 重置选举计时器
-				electionTimer.Reset(randomDuration(1500, 2000))
+				myNode.ResetElectionTimer()
 
 				// 创建一个上下文
 				var timerCtx context.Context
 				timerCtx, cancel = context.WithCancel(context.Background())
 				// 发送选举请求并收集选票
 				go collectVoteResults(timerCtx, myNode)
-				RequestVote(myNode, logEnt)
+				RequestVote(myNode)
 			case node.CANDIDATE:
 				//该term内没有选举出leader
 				// 重置选举计时器
-				electionTimer.Reset(randomDuration(1500, 2000))
+				myNode.ResetElectionTimer()
 
-				// 转换为 FOLLOWER
+				// 转换为 Candidate
 				myNode.Status = node.CANDIDATE
 
+				// 重发vote请求
 				var timerCtx context.Context
 				timerCtx, cancel = context.WithCancel(context.Background())
 				go collectVoteResults(timerCtx, myNode)
-				RequestVote(myNode, logEnt)
+				RequestVote(myNode)
 
 			case node.LEADER:
-				electionTimer.Reset(randomDuration(1500, 2000))
+				myNode.ResetElectionTimer()
 			}
 		case leaderTerm := <-leaderHeartbeat:
 			// 已经收到了别的leader的心跳
@@ -85,22 +84,24 @@ func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogE
 					myNode.UpdateTerm(leaderTerm)
 					//将自己的state置为follower
 					myNode.Status = node.FOLLOWER
+					fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 				}
 			} else if myNode.Status == node.CANDIDATE {
 				myNode.UpdateTerm(leaderTerm)
 				//将自己的state置为follower
 				myNode.Status = node.FOLLOWER
+				fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 			} else if myNode.Status == node.FOLLOWER {
 				myNode.UpdateTerm(leaderTerm)
 			}
 
 			// 重置选举计时器
-			electionTimer.Reset(randomDuration(1500, 2000))
+			myNode.ResetElectionTimer()
 		case <-receivedVoteRequest:
-			// 收到Vote请求后抑制成为candidate
+			// 接受Vote请求后抑制成为candidate
 			if myNode.Status == node.FOLLOWER {
 				// 重置选举计时器
-				electionTimer.Reset(randomDuration(1500, 2000))
+				myNode.ResetElectionTimer()
 			}
 		}
 	}
@@ -128,13 +129,20 @@ func collectVoteResults(ctx context.Context, myNode *node.Node) {
 	}
 }
 
-func RequestVote(myNode *node.Node, logEnt *LogEntry.LogEntry) {
+func RequestVote(myNode *node.Node) {
 
 	requeatVote := protocol.NewRequestVote()
 	requeatVote.Term = myNode.CurrentTerm
-	//requeatVote.CandidateIP
-	requeatVote.LastLogTerm = logEnt.LastLog.Term
-	requeatVote.LastLogIndex = logEnt.LastLog.Idx
+	//requeatVote.CandidateID
+
+	lastLogEntry := myNode.Log.GetLastEntry()
+	if lastLogEntry != nil {
+		requeatVote.LastLogIndex = lastLogEntry.Index
+		requeatVote.LastLogTerm = lastLogEntry.Term
+	} else {
+		requeatVote.LastLogIndex = -1
+		requeatVote.LastLogTerm = -1
+	}
 
 	marshalRV, err := requeatVote.Marshal()
 	if err != nil {
@@ -152,7 +160,7 @@ func RequestVote(myNode *node.Node, logEnt *LogEntry.LogEntry) {
 
 }
 
-func RequestVoteHandle(conn net.Conn, myNode *node.Node, logEnt *LogEntry.LogEntry, length int) {
+func RequestVoteHandle(conn net.Conn, myNode *node.Node, length int) {
 
 	// Read data from the connection
 	buf := make([]byte, length)
@@ -182,10 +190,25 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, logEnt *LogEntry.LogEnt
 	}
 
 	if request.Term > myNode.CurrentTerm {
+
+		lastLogEntry := myNode.Log.GetLastEntry()
+		var lastTerm int64 = -1
+		var lastIndex int64 = -1
+		if lastLogEntry != nil {
+			lastTerm = lastLogEntry.Term
+			lastIndex = lastLogEntry.Index
+		}
+
 		// Check if the candidate's log is up-to-date
-		if request.LastLogTerm > logEnt.LastLog.Term || (request.LastLogTerm == logEnt.LastLog.Term && request.LastLogIndex >= logEnt.LastLog.Idx) {
+		if request.LastLogTerm > lastTerm || (request.LastLogTerm == lastTerm && request.LastLogIndex >= lastIndex) {
 			res.VoteGranted = true
 		}
+	}
+
+	err = myNode.SetVoteFor(conn)
+	if err != nil {
+		log.Println("[RequestVoteHandle] Error has already voted:", err)
+		return
 	}
 
 	marshalRes, err := res.Marshal()
@@ -200,13 +223,8 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, logEnt *LogEntry.LogEnt
 	}
 
 	// 抑制成为candidate
-	receivedVoteRequest <- true
-
-	// 更新信息
-	myNode.UpdateTerm(request.Term)
-	err = myNode.SetVoteFor(conn)
-	if err != nil {
-		log.Println("[RequestVoteHandle] Error has already voted:", err)
+	if res.VoteGranted == true {
+		receivedVoteRequest <- true
 	}
 
 }
@@ -239,6 +257,7 @@ func RequestVoteResultHandle(conn net.Conn, myNode *node.Node, length int) {
 			// 存在term比自己大的节点
 			// 放弃竞选
 			myNode.Status = node.FOLLOWER
+			fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 			return
 		}
 

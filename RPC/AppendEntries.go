@@ -3,7 +3,6 @@ package RPC
 import (
 	"context"
 	"fmt"
-	"github.com/lvkeliang/Graft/LogEntry"
 	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
@@ -14,7 +13,7 @@ import (
 // 用于将收到的leaderHeartbeat传递给vote相关
 var leaderHeartbeat = make(chan int64)
 
-func StartAppendEntries(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogEntry) {
+func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 	ticker := time.NewTicker(70 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -29,21 +28,24 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node, logEnt *LogEntry
 				continue
 			}
 			myNode.ALLNode.Lock()
-			for ip, conn := range myNode.ALLNode.Conns {
-				//TODO: 创建一个AppendEntries协议，发送heartbeat以及log
+			for _, conn := range myNode.ALLNode.Conns {
 
 				appendEntries.Term = myNode.CurrentTerm
-				appendEntries.LeaderIP = myNode.VoteFor
-				appendEntries.PrevLogIndex = logEnt.PrevLog[ip].Idx
-				appendEntries.LeaderCommit = logEnt.CommitIndex
-				appendEntries.PrevLogTerm = logEnt.PrevLog[ip].Term
+				appendEntries.LeaderID = myNode.VoteFor
+				appendEntries.LeaderCommit = myNode.CommitIndex
 
-				if len(logEnt.LogItem) > 1 {
-					appendEntries.Entries = append([][]string{logEnt.LogItem[logEnt.PrevLog[ip].Term][logEnt.PrevLog[ip].Idx:]}, logEnt.LogItem[logEnt.PrevLog[ip].Term+1:][:]...)
+				//TODO: 为每个follower分配自己的PrevLogIndex和PrevLogTerm
+
+				lastLogEntry := myNode.Log.GetLastEntry()
+				if lastLogEntry != nil {
+					appendEntries.PrevLogIndex = lastLogEntry.Index
+					appendEntries.PrevLogTerm = lastLogEntry.Term
 				} else {
-					appendEntries.Entries = logEnt.LogItem[logEnt.PrevLog[ip].Term:][logEnt.PrevLog[ip].Idx:]
-
+					appendEntries.PrevLogIndex = -1
+					appendEntries.PrevLogTerm = -1
 				}
+
+				appendEntries.Entries = myNode.Log.Entries // Send all logEnt entries for simplicity
 
 				marshalAE, err := appendEntries.Marshal()
 				if err != nil {

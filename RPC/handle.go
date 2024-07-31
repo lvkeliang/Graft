@@ -1,14 +1,13 @@
 package RPC
 
 import (
-	"github.com/lvkeliang/Graft/LogEntry"
 	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
 )
 
-func Handle(conn net.Conn, myNode *node.Node, logEnt *LogEntry.LogEntry) {
+func Handle(conn net.Conn, myNode *node.Node) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
@@ -45,7 +44,7 @@ func Handle(conn net.Conn, myNode *node.Node, logEnt *LogEntry.LogEntry) {
 		case 2:
 			AppendEntriesResultHandle(conn, length)
 		case 3:
-			RequestVoteHandle(conn, myNode, logEnt, length)
+			RequestVoteHandle(conn, myNode, length)
 		case 4:
 			RequestVoteResultHandle(conn, myNode, length)
 		default:
