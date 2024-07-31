@@ -25,7 +25,7 @@ func randomDuration(min, max int) time.Duration {
 
 // StartElection 启动计时和发起选举请求的协程
 func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogEntry) {
-	electionTimer := time.NewTimer(randomDuration(5000, 6000)) // 5s 到 6s
+	electionTimer := time.NewTimer(randomDuration(1500, 2000)) // 5s 到 6s
 
 	// 用于取消选票的进程
 	var cancel context.CancelFunc
@@ -53,7 +53,7 @@ func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogE
 				fmt.Printf("节点转为 Candidate, 当前term: %v\n", myNode.CurrentTerm)
 
 				// 重置选举计时器
-				electionTimer.Reset(randomDuration(5000, 6000))
+				electionTimer.Reset(randomDuration(1500, 2000))
 
 				// 创建一个上下文
 				var timerCtx context.Context
@@ -64,14 +64,18 @@ func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogE
 			case node.CANDIDATE:
 				//该term内没有选举出leader
 				// 重置选举计时器
-				electionTimer.Reset(randomDuration(5000, 6000))
+				electionTimer.Reset(randomDuration(1500, 2000))
 
 				// 转换为 FOLLOWER
-				myNode.Status = node.FOLLOWER
-				fmt.Printf("节点转为 follower, 当前term: %v\n", myNode.CurrentTerm)
+				myNode.Status = node.CANDIDATE
+
+				var timerCtx context.Context
+				timerCtx, cancel = context.WithCancel(context.Background())
+				go collectVoteResults(timerCtx, myNode)
+				RequestVote(myNode, logEnt)
 
 			case node.LEADER:
-				electionTimer.Reset(randomDuration(5000, 6000))
+				electionTimer.Reset(randomDuration(1500, 2000))
 			}
 		case leaderTerm := <-leaderHeartbeat:
 			// 已经收到了别的leader的心跳
@@ -91,12 +95,12 @@ func StartElection(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogE
 			}
 
 			// 重置选举计时器
-			electionTimer.Reset(randomDuration(5000, 6000))
+			electionTimer.Reset(randomDuration(1500, 2000))
 		case <-receivedVoteRequest:
 			// 收到Vote请求后抑制成为candidate
 			if myNode.Status == node.FOLLOWER {
 				// 重置选举计时器
-				electionTimer.Reset(randomDuration(5000, 6000))
+				electionTimer.Reset(randomDuration(1500, 2000))
 			}
 		}
 	}
@@ -172,7 +176,7 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, logEnt *LogEntry.LogEnt
 	res.Term = myNode.CurrentTerm
 
 	//确保候选者的term要比本节点的大
-	if myNode.Status != node.FOLLOWER {
+	if myNode.Status == node.LEADER {
 		res.VoteGranted = false
 		return
 	}

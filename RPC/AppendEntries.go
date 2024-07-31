@@ -15,7 +15,7 @@ import (
 var leaderHeartbeat = make(chan int64)
 
 func StartAppendEntries(ctx context.Context, myNode *node.Node, logEnt *LogEntry.LogEntry) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(70 * time.Millisecond)
 	defer ticker.Stop()
 
 	appendEntries := protocol.NewAppendEntries()

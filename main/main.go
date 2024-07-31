@@ -22,7 +22,7 @@ var logEnt *LogEntry.LogEntry
 func main() {
 
 	go func() {
-		err := StartServer(":253")
+		err := StartServer(":256")
 		if err != nil {
 			return
 		}
@@ -32,7 +32,7 @@ func main() {
 
 	go termWatcher()
 
-	Init([]string{"localhost:256", "localhost:255", "localhost:254"})
+	Init([]string{"localhost:255", "localhost:254", "localhost:253"})
 	go RPC.StartElection(context.Background(), myNode, logEnt)
 	RPC.StartAppendEntries(context.Background(), myNode, logEnt)
 
