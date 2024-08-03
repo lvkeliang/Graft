@@ -24,25 +24,21 @@ func main() {
 		}
 	}()
 
-	Init([]string{"localhost:255", "localhost:256", "localhost:254"})
+	Init([]string{"localhost:254", "localhost:255", "localhost:256"})
 
 	go inputNode()
 
 	go termWatcher()
 	go RPC.StartElection(context.Background(), myNode)
 
-	//myNode.Log.Append(LogEntry.LogEntry{
-	//	Term:    1,
-	//	Index:   1,
-	//	Command: "Set x = 1",
-	//})
+	//myNode.Log.AddLog(myNode.CurrentTerm, "Set x = 1")
 
 	RPC.StartAppendEntries(context.Background(), myNode)
 
 }
 
 func Init(address []string) {
-	myNode = node.NewNode("1", "node_state"+port+".json")
+	myNode = node.NewNode("1", "node_state"+port+".json", "node"+port+"log.gob")
 
 	for _, addr := range address {
 		conn, err := net.Dial("tcp", addr)
@@ -51,7 +47,7 @@ func Init(address []string) {
 			continue
 		}
 
-		myNode.ALLNode.Add(conn)
+		myNode.AddNode(conn)
 		go RPC.Handle(conn, myNode)
 	}
 }
@@ -68,7 +64,7 @@ func StartServer(port string) error {
 	for {
 		conn, err := ln.Accept()
 		// ip := conn.RemoteAddr().String()
-		myNode.ALLNode.Add(conn)
+		myNode.AddNode(conn)
 		if err != nil {
 			log.Printf("[server] accept dial failed\n")
 			return errors.New("accept dial failed")

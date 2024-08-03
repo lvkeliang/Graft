@@ -79,13 +79,17 @@ func StartElection(ctx context.Context, myNode *node.Node) {
 		case leaderTerm := <-leaderHeartbeat:
 			// 已经收到了别的leader的心跳
 			// 更新term为term最新的leader的term
-			if myNode.Status == node.LEADER {
+
+			if myNode.Status == node.LEADER || myNode.Status == node.CANDIDATE {
 				if myNode.CurrentTerm < leaderTerm {
-					myNode.UpdateTerm(leaderTerm)
 					//将自己的state置为follower
 					myNode.Status = node.FOLLOWER
 					fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 				}
+			}
+
+			if myNode.CurrentTerm < leaderTerm {
+				myNode.UpdateTerm(leaderTerm)
 			}
 
 			// 重置选举计时器

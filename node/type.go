@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/lvkeliang/Graft/LogEntry"
+	"github.com/lvkeliang/Graft/matchIndex"
+	"github.com/lvkeliang/Graft/nextIndex"
 	"log"
 	"math/rand"
 	"net"
@@ -58,8 +60,8 @@ type Node struct {
 	Log           *LogEntry.Log
 	CommitIndex   int64
 	LastApplied   int64
-	NextIndex     []int64
-	MatchIndex    []int64
+	NextIndex     *nextIndex.NextIndex
+	MatchIndex    *matchIndex.MatchIndex
 	ElectionTimer *time.Timer
 	ALLNode       *NodesPool
 	filePath      string
@@ -72,8 +74,8 @@ type PersistentState struct {
 	LastApplied int64
 }
 
-func NewNode(id string, filePath string) *Node {
-	logEnt, err := LogEntry.NewLog("raft_log.json")
+func NewNode(id string, stateFilePath string, logFilePath string) *Node {
+	logEnt, err := LogEntry.NewLog(logFilePath)
 	if err != nil {
 		log.Printf("[NewNode] init logEntry failed: %v\n", err)
 		return nil
@@ -87,13 +89,13 @@ func NewNode(id string, filePath string) *Node {
 		Log:           logEnt,
 		CommitIndex:   0,
 		LastApplied:   0,
-		NextIndex:     make([]int64, 0),
-		MatchIndex:    make([]int64, 0),
+		NextIndex:     nextIndex.NewNextIndex(),
+		MatchIndex:    matchIndex.NewMatchIndex(),
 		ElectionTimer: time.NewTimer(RandomElectionTimeout()),
 		ALLNode: &NodesPool{
 			Conns: make(map[string]net.Conn),
 		},
-		filePath: filePath,
+		filePath: stateFilePath,
 	}
 
 	err = node.load()
@@ -112,7 +114,19 @@ func (r *Node) ResetElectionTimer() {
 
 // RandomElectionTimeout generates a random election timeout duration.
 func RandomElectionTimeout() time.Duration {
-	return time.Duration(150+rand.Intn(150)) * time.Millisecond
+	return time.Duration(5000+rand.Intn(1500)) * time.Millisecond
+}
+
+func (node *Node) AddNode(conn net.Conn) {
+	node.ALLNode.Add(conn)
+	node.MatchIndex.Update(conn.RemoteAddr().String(), 0)
+	node.NextIndex.Update(conn.RemoteAddr().String(), 0)
+}
+
+func (node *Node) RemoveNode(conn net.Conn) {
+	node.ALLNode.Remove(conn)
+	node.MatchIndex.Del(conn.RemoteAddr().String())
+	node.NextIndex.Del(conn.RemoteAddr().String())
 }
 
 func (node *Node) SetVoteFor(conn net.Conn) error {
@@ -133,6 +147,16 @@ func (node *Node) UpdateTerm(term int64) {
 func (node *Node) TermAddOne() {
 	node.CurrentTerm++
 	node.VoteFor = ""
+	node.persist()
+}
+
+func (node *Node) UpdateCommitIndex(index int64) {
+	node.CommitIndex = index
+	node.persist()
+}
+
+func (node *Node) UpdateLastApplied(index int64) {
+	node.LastApplied = index
 	node.persist()
 }
 

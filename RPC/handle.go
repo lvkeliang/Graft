@@ -17,13 +17,16 @@ func Handle(conn net.Conn, myNode *node.Node) {
 	}(conn)
 
 	for {
+		//buf := make([]byte, 1024*5)
+		//n, _ := conn.Read(buf)
+		//log.Println("Unknown type message:", string(buf[:n]))
 
 		// Read the first byte to determine the message type
 		msgType := make([]byte, 1)
 		_, err := conn.Read(msgType)
 		if err != nil {
 			log.Println("[Handle] Error reading message type:", err)
-			myNode.ALLNode.Remove(conn)
+			myNode.RemoveNode(conn)
 			return
 		}
 
@@ -31,7 +34,7 @@ func Handle(conn net.Conn, myNode *node.Node) {
 		_, err = conn.Read(lengthByte)
 		if err != nil {
 			log.Println("[Handle] Error reading message lengthByte:", err)
-			myNode.ALLNode.Remove(conn)
+			myNode.RemoveNode(conn)
 			return
 		}
 
@@ -42,13 +45,16 @@ func Handle(conn net.Conn, myNode *node.Node) {
 			// Handle AppendEntries message
 			AppendEntriesHandle(conn, myNode, length)
 		case 2:
-			AppendEntriesResultHandle(conn, length)
+			AppendEntriesResultHandle(conn, myNode, length)
 		case 3:
 			RequestVoteHandle(conn, myNode, length)
 		case 4:
 			RequestVoteResultHandle(conn, myNode, length)
 		default:
 			log.Println("[Handle] Unknown message type:", msgType[0])
+			//buf := make([]byte, length)
+			//n, _ := conn.Read(buf)
+			//log.Println("Unknown type message:", string(buf[:n]))
 		}
 	}
 

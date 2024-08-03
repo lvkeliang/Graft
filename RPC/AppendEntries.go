@@ -14,10 +14,8 @@ import (
 var leaderHeartbeat = make(chan int64)
 
 func StartAppendEntries(ctx context.Context, myNode *node.Node) {
-	ticker := time.NewTicker(70 * time.Millisecond)
+	ticker := time.NewTicker(5000 * time.Millisecond)
 	defer ticker.Stop()
-
-	appendEntries := protocol.NewAppendEntries()
 
 	for {
 		select {
@@ -28,26 +26,54 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				continue
 			}
 			myNode.ALLNode.Lock()
-			for _, conn := range myNode.ALLNode.Conns {
+			for address, conn := range myNode.ALLNode.Conns {
 
-				appendEntries.Term = myNode.CurrentTerm
-				appendEntries.LeaderID = myNode.VoteFor
-				appendEntries.LeaderCommit = myNode.CommitIndex
+				appendEntries := protocol.NewAppendEntries()
+				appendEntries = &protocol.AppendEntries{
+					Term:         myNode.CurrentTerm,
+					LeaderID:     myNode.ID,
+					LeaderCommit: myNode.CommitIndex,
+				}
 
-				//TODO: 为每个follower分配自己的PrevLogIndex和PrevLogTerm
+				// 使用 nextIndex 来选择 PrevLogIndex 和 PrevLogTerm
+				nextLogIndex, ok := myNode.NextIndex.Get(address)
+				prevLogIndex := nextLogIndex - 1
 
-				lastLogEntry := myNode.Log.GetLastEntry()
-				if lastLogEntry != nil {
-					appendEntries.PrevLogIndex = lastLogEntry.Index
-					appendEntries.PrevLogTerm = lastLogEntry.Term
+				if !ok {
+					log.Println("[StartAppendEntries] nextIndex address not found")
+					continue
+				}
+
+				if prevLogIndex >= 0 {
+					prevLogEntry, err := myNode.Log.Get(prevLogIndex)
+					if err != nil {
+						log.Printf("[StartAppendEntries] get prevLogIndex log index out of range: %v\n", prevLogIndex)
+						continue
+					}
+					appendEntries.PrevLogIndex = prevLogIndex
+					appendEntries.PrevLogTerm = prevLogEntry.Term
 				} else {
 					appendEntries.PrevLogIndex = -1
 					appendEntries.PrevLogTerm = -1
 				}
 
-				appendEntries.Entries = myNode.Log.Entries // Send all logEnt entries for simplicity
+				// 从 nextIndex 开始添加日志条目
+				fmt.Println("myNode.Log.LastIndex(): ", myNode.Log.LastIndex())
+				fmt.Println("nextLogIndex: ", nextLogIndex)
+				if nextLogIndex == myNode.Log.LastIndex()+1 {
+					// 如果follower已经有了完全的log，则发送nil
+					appendEntries.Entries = nil
+				} else {
+					index, err := myNode.Log.GetAfterIndex(nextLogIndex)
+					if err != nil {
+						log.Printf("[StartAppendEntries] getAfterIndex index out of range: %v\n", nextLogIndex)
+						continue
+					}
+					appendEntries.Entries = index
+				}
 
 				marshalAE, err := appendEntries.Marshal()
+				fmt.Println(string(marshalAE))
 				if err != nil {
 					log.Println("[StartAppendEntries] appendEntries.Marshal failed")
 					continue
@@ -56,11 +82,13 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				_, err = conn.Write(marshalAE)
 				if err != nil {
 					log.Println("[StartAppendEntries] send marshalAE failed")
-					return
+					continue
 				}
 			}
 			myNode.ALLNode.Unlock()
 		}
+
+		ticker.Reset(5000 * time.Millisecond)
 	}
 }
 
@@ -74,24 +102,55 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 	}
 
 	// Parse received data into AppendEntriesResult
-	result := protocol.NewAppendEntries()
-	resup := buf[:n]
-	err = result.UNMarshal(resup)
+	appendEntries := protocol.NewAppendEntries()
+	err = appendEntries.UNMarshal(buf[:n])
 	if err != nil {
 		log.Println("[AppendEntriesHandle] Error unmarshaling data:", err)
-		log.Println(string(resup))
 		return
 	}
 
 	// 将收到的leaderHeartbeat传递给vote相关
 	// 更新自己的term到leader的term
-	leaderHeartbeat <- result.Term
-	//fmt.Printf("[AppendEntriesHandle] leader term: %v\n", result.Term)
+	leaderHeartbeat <- appendEntries.Term
+	//fmt.Printf("[AppendEntriesHandle] leader term: %v\n", appendEntries.Term)
 
 	res := protocol.NewAppendEntriesResult()
 
-	res.Success = true
+	// 验证 PrevLogIndex 和 PrevLogTerm
+	res.Success = false
+
+	var prevTerm int64 = -1
+	if appendEntries.PrevLogIndex >= 0 {
+		prevLog, err := myNode.Log.Get(appendEntries.PrevLogIndex)
+		if err != nil {
+			log.Printf("[AppendEntriesHandle] index out of range: %v\n", appendEntries.PrevLogIndex)
+		}
+
+		prevTerm = prevLog.Term
+	}
+
+	if appendEntries.PrevLogIndex == -1 || (appendEntries.PrevLogIndex == myNode.Log.LastIndex()) && (prevTerm == appendEntries.PrevLogTerm) {
+		res.Success = true
+
+		fmt.Println(true)
+		if appendEntries.Entries != nil {
+			// 添加日志条目
+			myNode.Log.AppendEntries(appendEntries.Entries)
+
+			// 更新 commitIndex 和 lastApplied
+			if appendEntries.LeaderCommit > myNode.CommitIndex {
+				myNode.UpdateCommitIndex(appendEntries.LeaderCommit)
+				if myNode.CommitIndex > myNode.Log.LastIndex() {
+					myNode.UpdateCommitIndex(myNode.Log.LastIndex())
+				}
+				myNode.UpdateLastApplied(myNode.CommitIndex)
+			}
+		}
+	}
+
 	res.Term = myNode.CurrentTerm
+
+	fmt.Println(myNode.Log.Entries)
 	marshalRes, err := res.Marshal()
 	if err != nil {
 		log.Println("[AppendEntriesHandle] Error marshaling res:", err)
@@ -104,7 +163,7 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 	}
 }
 
-func AppendEntriesResultHandle(conn net.Conn, length int) {
+func AppendEntriesResultHandle(conn net.Conn, myNode *node.Node, length int) {
 
 	// Read data from the connection
 	buf := make([]byte, length)
@@ -115,20 +174,33 @@ func AppendEntriesResultHandle(conn net.Conn, length int) {
 	}
 
 	// Parse received data into AppendEntriesResult
-	result := protocol.NewAppendEntriesResult()
-	err = result.UNMarshal(buf[:n])
+	appendEntriesResult := protocol.NewAppendEntriesResult()
+	err = appendEntriesResult.UNMarshal(buf[:n])
 	if err != nil {
 		log.Println("[AppendEntriesResultHandle] Error unmarshaling data:", err)
 		return
 	}
 
-	// Process the result (e.g., update leader's term, handle success/failure)
-	if result.Success {
-		// fmt.Println("[AppendEntriesResultHandle] Received successful AppendEntriesResult")
-		// Update leader's term if needed
+	// 使用 nextIndex 来选择 PrevLogIndex 和 PrevLogTerm
+	nextLogIndex, ok := myNode.NextIndex.Get(conn.RemoteAddr().String())
+
+	prevLogIndex := nextLogIndex - 1
+	if !ok {
+		log.Println("[AppendEntriesResultHandle] address not found")
+		return
+	}
+
+	// 处理响应
+	if appendEntriesResult.Success {
+		myNode.MatchIndex.Update(conn.RemoteAddr().String(), prevLogIndex)
+		myNode.NextIndex.Update(conn.RemoteAddr().String(), myNode.Log.LastIndex()+1)
+		fmt.Printf("update nextLogIndex: %v\n", myNode.Log.LastIndex()+1)
 	} else {
-		fmt.Println("[AppendEntriesResultHandle] Received failed AppendEntriesResult")
-		// Handle failure case
+		fmt.Printf("Decrement\n")
+		myNode.NextIndex.Decrement(conn.RemoteAddr().String())
+		if idx, ok := myNode.NextIndex.Get(conn.RemoteAddr().String()); ok && idx < 0 {
+			myNode.NextIndex.Update(conn.RemoteAddr().String(), 0)
+		}
 	}
 
 }

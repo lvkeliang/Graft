@@ -86,11 +86,28 @@ func (l *Log) load() error {
 	return nil
 }
 
+func (l *Log) AddLog(term int64, command string) {
+
+	l.Append(LogEntry{
+		Index:   l.LastIndex() + 1,
+		Term:    term,
+		Command: command,
+	})
+}
+
 func (l *Log) Append(entry LogEntry) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	l.Entries = append(l.Entries, entry)
+	return l.persist()
+}
+
+func (l *Log) AppendEntries(entries []LogEntry) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.Entries = append(l.Entries, entries...)
 	return l.persist()
 }
 
@@ -144,6 +161,21 @@ func (l *Log) Get(index int64) (*LogEntry, error) {
 	}
 
 	return &l.Entries[index], nil
+}
+
+func (l *Log) GetAfterIndex(index int64) ([]LogEntry, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if index == 0 && len(l.Entries) == 0 {
+		return nil, nil
+	}
+
+	if index < 0 || index >= int64(len(l.Entries)) {
+		return nil, fmt.Errorf("index out of range")
+	}
+
+	return l.Entries[index:], nil
 }
 
 func (l *Log) LastIndex() int64 {
