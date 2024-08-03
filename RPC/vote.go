@@ -78,7 +78,7 @@ func StartElection(ctx context.Context, myNode *node.Node) {
 			}
 		case leaderTerm := <-leaderHeartbeat:
 			// 已经收到了别的leader的心跳
-			// 更新term为ter最新的leader的term
+			// 更新term为term最新的leader的term
 			if myNode.Status == node.LEADER {
 				if myNode.CurrentTerm < leaderTerm {
 					myNode.UpdateTerm(leaderTerm)
@@ -86,13 +86,6 @@ func StartElection(ctx context.Context, myNode *node.Node) {
 					myNode.Status = node.FOLLOWER
 					fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 				}
-			} else if myNode.Status == node.CANDIDATE {
-				myNode.UpdateTerm(leaderTerm)
-				//将自己的state置为follower
-				myNode.Status = node.FOLLOWER
-				fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
-			} else if myNode.Status == node.FOLLOWER {
-				myNode.UpdateTerm(leaderTerm)
 			}
 
 			// 重置选举计时器
@@ -183,13 +176,13 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, length int) {
 	res := protocol.NewRequestVoteResult()
 	res.Term = myNode.CurrentTerm
 
-	//确保候选者的term要比本节点的大
+	//确保候选者的term不小于本节点的
 	if myNode.Status == node.LEADER {
 		res.VoteGranted = false
 		return
 	}
 
-	if request.Term > myNode.CurrentTerm {
+	if request.Term >= myNode.CurrentTerm {
 
 		lastLogEntry := myNode.Log.GetLastEntry()
 		var lastTerm int64 = -1
@@ -202,13 +195,16 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, length int) {
 		// Check if the candidate's log is up-to-date
 		if request.LastLogTerm > lastTerm || (request.LastLogTerm == lastTerm && request.LastLogIndex >= lastIndex) {
 			res.VoteGranted = true
-		}
-	}
 
-	err = myNode.SetVoteFor(conn)
-	if err != nil {
-		log.Println("[RequestVoteHandle] Error has already voted:", err)
-		return
+			fmt.Printf("VoteGranted to : %v\n", conn.RemoteAddr())
+
+			// 标记已投票
+			err = myNode.SetVoteFor(conn)
+			if err != nil {
+				log.Println("[RequestVoteHandle] Error has already voted:", err)
+				return
+			}
+		}
 	}
 
 	marshalRes, err := res.Marshal()

@@ -13,10 +13,12 @@ import (
 
 var myNode *node.Node
 
+const port = "253"
+
 func main() {
 
 	go func() {
-		err := StartServer(":253")
+		err := StartServer(":" + port)
 		if err != nil {
 			return
 		}
@@ -28,12 +30,19 @@ func main() {
 
 	go termWatcher()
 	go RPC.StartElection(context.Background(), myNode)
+
+	//myNode.Log.Append(LogEntry.LogEntry{
+	//	Term:    1,
+	//	Index:   1,
+	//	Command: "Set x = 1",
+	//})
+
 	RPC.StartAppendEntries(context.Background(), myNode)
 
 }
 
 func Init(address []string) {
-	myNode = node.NewNode()
+	myNode = node.NewNode("1", "node_state"+port+".json")
 
 	for _, addr := range address {
 		conn, err := net.Dial("tcp", addr)
@@ -81,7 +90,7 @@ func termWatcher() {
 		case <-ticker.C:
 			if myNode.CurrentTerm != watcher {
 				watcher = myNode.CurrentTerm
-				log.Printf("[TermWatcher] %v\n", watcher)
+				log.Printf("[TermWatcher] %v with nodesPool: %v\n", watcher, myNode.ALLNode.Conns)
 			}
 		}
 	}
