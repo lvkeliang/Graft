@@ -31,8 +31,9 @@ func main() {
 	go termWatcher()
 	go RPC.StartElection(context.Background(), myNode)
 
-	//myNode.Log.AddLog(myNode.CurrentTerm, "Set x = 2")
-	//myNode.Log.AddLog(myNode.CurrentTerm, "Set x = 3")
+	//for i := 1; i < 10; i++ {
+	//	myNode.Log.AddLog(myNode.CurrentTerm, "Set x = "+fmt.Sprintf("%d", i))
+	//}
 
 	RPC.StartAppendEntries(context.Background(), myNode)
 

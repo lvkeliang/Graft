@@ -67,6 +67,7 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 					// 如果是初始化的nextLogIndex(标记为-1),则发送空的AppendEntries以重新收集各个节点的nextIndex,用以保证一致性
 					// fmt.Println("Initial AppendEntries")
 					appendEntries.Entries = nil
+					myNode.NextIndex.Update(conn.RemoteAddr().String(), 0)
 				} else {
 					index, err := myNode.Log.GetAfterIndex(nextLogIndex)
 					if err != nil {
@@ -74,6 +75,7 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 						continue
 					}
 					appendEntries.Entries = index
+
 				}
 
 				marshalAE, err := appendEntries.Marshal()
@@ -87,6 +89,11 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				if err != nil {
 					log.Println("[StartAppendEntries] send marshalAE failed")
 					continue
+				}
+
+				if appendEntries.Entries != nil {
+					myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntries.Entries[len(appendEntries.Entries)-1].Index+1)
+					//fmt.Printf("update nextLogIndex: %v\n", appendEntries.Entries[len(appendEntries.Entries)-1].Index+1)
 				}
 			}
 			myNode.ALLNode.Unlock()
@@ -201,8 +208,6 @@ func AppendEntriesResultHandle(conn net.Conn, myNode *node.Node, length int) {
 	// 处理响应
 	if appendEntriesResult.Success {
 		myNode.MatchIndex.Update(conn.RemoteAddr().String(), prevLogIndex)
-		myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntriesResult.LastIndex+1)
-		fmt.Printf("update nextLogIndex: %v\n", myNode.Log.LastIndex()+1)
 	} else {
 		fmt.Printf("Decrement\n")
 		myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntriesResult.LastIndex+1)

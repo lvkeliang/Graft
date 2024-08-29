@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+const MaxSendLogNum = 2
+
 // LogEntry represents a single entry in the Raft log.
 type LogEntry struct {
 	Term    int64
@@ -164,6 +166,7 @@ func (l *Log) Get(index int64) (*LogEntry, error) {
 }
 
 func (l *Log) GetAfterIndex(index int64) ([]LogEntry, error) {
+	fmt.Println("GetRange : ", index)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -175,7 +178,13 @@ func (l *Log) GetAfterIndex(index int64) ([]LogEntry, error) {
 		return nil, fmt.Errorf("index out of range")
 	}
 
-	return l.Entries[index:], nil
+	// 计算应该返回的日志条目数
+	endIndex := index + int64(MaxSendLogNum)
+	if endIndex > int64(len(l.Entries)) {
+		endIndex = int64(len(l.Entries))
+	}
+
+	return l.Entries[index:endIndex], nil
 }
 
 func (l *Log) LastIndex() int64 {
