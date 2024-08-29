@@ -63,6 +63,10 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				if nextLogIndex == myNode.Log.LastIndex()+1 {
 					// 如果follower已经有了完全的log，则发送nil
 					appendEntries.Entries = nil
+				} else if nextLogIndex == -1 {
+					// 如果是初始化的nextLogIndex(标记为-1),则发送空的AppendEntries以重新收集各个节点的nextIndex,用以保证一致性
+					// fmt.Println("Initial AppendEntries")
+					appendEntries.Entries = nil
 				} else {
 					index, err := myNode.Log.GetAfterIndex(nextLogIndex)
 					if err != nil {
@@ -129,7 +133,7 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 		prevTerm = prevLog.Term
 	}
 
-	if appendEntries.PrevLogIndex == -1 || (appendEntries.PrevLogIndex == myNode.Log.LastIndex()) && (prevTerm == appendEntries.PrevLogTerm) {
+	if (appendEntries.PrevLogIndex == -1 && myNode.Log.LastIndex() == -1) || (appendEntries.PrevLogIndex == myNode.Log.LastIndex()) && (prevTerm == appendEntries.PrevLogTerm) {
 		res.Success = true
 
 		fmt.Println(true)
@@ -146,6 +150,10 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 				myNode.UpdateLastApplied(myNode.CommitIndex)
 			}
 		}
+
+		res.LastIndex = myNode.Log.LastIndex()
+	} else {
+		res.LastIndex = myNode.Log.LastIndex()
 	}
 
 	res.Term = myNode.CurrentTerm
@@ -193,11 +201,11 @@ func AppendEntriesResultHandle(conn net.Conn, myNode *node.Node, length int) {
 	// 处理响应
 	if appendEntriesResult.Success {
 		myNode.MatchIndex.Update(conn.RemoteAddr().String(), prevLogIndex)
-		myNode.NextIndex.Update(conn.RemoteAddr().String(), myNode.Log.LastIndex()+1)
+		myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntriesResult.LastIndex+1)
 		fmt.Printf("update nextLogIndex: %v\n", myNode.Log.LastIndex()+1)
 	} else {
 		fmt.Printf("Decrement\n")
-		myNode.NextIndex.Decrement(conn.RemoteAddr().String())
+		myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntriesResult.LastIndex+1)
 		if idx, ok := myNode.NextIndex.Get(conn.RemoteAddr().String()); ok && idx < 0 {
 			myNode.NextIndex.Update(conn.RemoteAddr().String(), 0)
 		}

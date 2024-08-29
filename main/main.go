@@ -13,32 +13,33 @@ import (
 
 var myNode *node.Node
 
-const port = "253"
+const RPCPort = "255"
 
 func main() {
 
 	go func() {
-		err := StartServer(":" + port)
+		err := StartServer(":" + RPCPort)
 		if err != nil {
 			return
 		}
 	}()
 
-	Init([]string{"localhost:254", "localhost:255", "localhost:256"})
+	Init([]string{"localhost:253", "localhost:254", "localhost:256"})
 
 	go inputNode()
 
 	go termWatcher()
 	go RPC.StartElection(context.Background(), myNode)
 
-	//myNode.Log.AddLog(myNode.CurrentTerm, "Set x = 1")
+	//myNode.Log.AddLog(myNode.CurrentTerm, "Set x = 2")
+	//myNode.Log.AddLog(myNode.CurrentTerm, "Set x = 3")
 
 	RPC.StartAppendEntries(context.Background(), myNode)
 
 }
 
 func Init(address []string) {
-	myNode = node.NewNode("1", "node_state"+port+".json", "node"+port+"log.gob")
+	myNode = node.NewNode("1", "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob")
 
 	for _, addr := range address {
 		conn, err := net.Dial("tcp", addr)

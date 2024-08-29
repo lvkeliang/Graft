@@ -119,8 +119,8 @@ func RandomElectionTimeout() time.Duration {
 
 func (node *Node) AddNode(conn net.Conn) {
 	node.ALLNode.Add(conn)
-	node.MatchIndex.Update(conn.RemoteAddr().String(), 0)
-	node.NextIndex.Update(conn.RemoteAddr().String(), 0)
+	node.MatchIndex.Update(conn.RemoteAddr().String(), -1)
+	node.NextIndex.Update(conn.RemoteAddr().String(), -1)
 }
 
 func (node *Node) RemoveNode(conn net.Conn) {

@@ -58,6 +58,14 @@ func (index *NextIndex) Decrement(nodeId string) {
 	}
 }
 
+func (index *NextIndex) Reset() {
+	index.mu.Lock()
+	defer index.mu.Unlock()
+	for nodeId := range index.hashMap {
+		index.hashMap[nodeId] = -1
+	}
+}
+
 // MajorityAtOrAbove checks if a majority of nodes have their next index at or above the given entryIdx.
 func (index *NextIndex) MajorityAtOrAbove(entryIdx int64) bool {
 	index.mu.RLock()

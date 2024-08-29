@@ -119,6 +119,10 @@ func collectVoteResults(ctx context.Context, myNode *node.Node) {
 				// 获得大于一半的节点的投票同意，晋升为 Leader
 				myNode.Status = node.LEADER
 				fmt.Printf("节点晋升为 Leader, 当前term: %v\n", myNode.CurrentTerm)
+
+				//转为Leader时将nextIndex重置,由AppendEntries发出空的RPC请求以重新收集各个节点的nextIndex,用以保证一致性
+				myNode.NextIndex.Reset()
+
 				return
 			}
 

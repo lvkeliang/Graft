@@ -44,8 +44,9 @@ func (ae *AppendEntries) UNMarshal(strae []byte) error {
 
 // AppendEntriesResult 首字节标识为2
 type AppendEntriesResult struct {
-	Term    int64 //现在的term,用于leader更新其自己的term
-	Success bool  //如果follower包含与prevLogIndex和prevLogTerm匹配的entry则为True
+	Term      int64 //现在的term,用于leader更新其自己的term
+	LastIndex int64 //最新的Index,用于leader更新自己的nextIndex
+	Success   bool  //如果follower包含与prevLogIndex和prevLogTerm匹配的entry则为True
 }
 
 func NewAppendEntriesResult() *AppendEntriesResult {
