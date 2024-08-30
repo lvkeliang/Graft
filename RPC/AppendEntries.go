@@ -58,8 +58,8 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				}
 
 				// 从 nextIndex 开始添加日志条目
-				fmt.Println("myNode.Log.LastIndex(): ", myNode.Log.LastIndex())
-				fmt.Println("nextLogIndex: ", nextLogIndex)
+				//fmt.Println("myNode.Log.LastIndex(): ", myNode.Log.LastIndex())
+				//fmt.Println("nextLogIndex: ", nextLogIndex)
 				if nextLogIndex == myNode.Log.LastIndex()+1 {
 					// 如果follower已经有了完全的log，则发送nil
 					appendEntries.Entries = nil
@@ -79,15 +79,16 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				}
 
 				marshalAE, err := appendEntries.Marshal()
-				fmt.Println(string(marshalAE))
+				// fmt.Println(string(marshalAE))
 				if err != nil {
-					log.Println("[StartAppendEntries] appendEntries.Marshal failed")
+					log.Println("[StartAppendEntries] appendEntries.Marshal failed", err)
 					continue
 				}
 
 				_, err = conn.Write(marshalAE)
 				if err != nil {
-					log.Println("[StartAppendEntries] send marshalAE failed")
+					log.Println("[StartAppendEntries] send marshalAE failed: ", err)
+					myNode.RemoveNode(conn)
 					continue
 				}
 
@@ -95,6 +96,8 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 					myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntries.Entries[len(appendEntries.Entries)-1].Index+1)
 					//fmt.Printf("update nextLogIndex: %v\n", appendEntries.Entries[len(appendEntries.Entries)-1].Index+1)
 				}
+
+				fmt.Println("[AppendEntries] MatchIndex: ", myNode.MatchIndex.GetAll())
 			}
 			myNode.ALLNode.Unlock()
 		}
@@ -143,18 +146,19 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 	if (appendEntries.PrevLogIndex == -1 && myNode.Log.LastIndex() == -1) || (appendEntries.PrevLogIndex == myNode.Log.LastIndex()) && (prevTerm == appendEntries.PrevLogTerm) {
 		res.Success = true
 
-		fmt.Println(true)
 		if appendEntries.Entries != nil {
 			// 添加日志条目
 			myNode.Log.AppendEntries(appendEntries.Entries)
+			fmt.Printf("[AppendEntriesHandle] appendEntries.LeaderCommit: %v | myNode.CommitIndex: %v | LastIndex: %v\n", appendEntries.LeaderCommit, myNode.CommitIndex, myNode.Log.LastIndex())
+		}
 
-			// 更新 commitIndex 和 lastApplied
-			if appendEntries.LeaderCommit > myNode.CommitIndex {
-				myNode.UpdateCommitIndex(appendEntries.LeaderCommit)
-				if myNode.CommitIndex > myNode.Log.LastIndex() {
-					myNode.UpdateCommitIndex(myNode.Log.LastIndex())
-				}
-				myNode.UpdateLastApplied(myNode.CommitIndex)
+		// 更新 commitIndex 和 lastApplied
+		if appendEntries.LeaderCommit > myNode.CommitIndex {
+
+			if appendEntries.LeaderCommit > myNode.Log.LastIndex() {
+				myNode.UpdateCommitIndexByLeader(myNode.Log.LastIndex())
+			} else {
+				myNode.UpdateCommitIndexByLeader(appendEntries.LeaderCommit)
 			}
 		}
 
@@ -171,11 +175,14 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 		log.Println("[AppendEntriesHandle] Error marshaling res:", err)
 		return
 	}
+
 	_, err = conn.Write(marshalRes)
 	if err != nil {
 		log.Println("[AppendEntriesHandle] send marshalRes faield:", err)
 		return
 	}
+
+	fmt.Println("[AppendEntriesHandle] sent:", res)
 }
 
 func AppendEntriesResultHandle(conn net.Conn, myNode *node.Node, length int) {
@@ -196,20 +203,14 @@ func AppendEntriesResultHandle(conn net.Conn, myNode *node.Node, length int) {
 		return
 	}
 
-	// 使用 nextIndex 来选择 PrevLogIndex 和 PrevLogTerm
-	nextLogIndex, ok := myNode.NextIndex.Get(conn.RemoteAddr().String())
-
-	prevLogIndex := nextLogIndex - 1
-	if !ok {
-		log.Println("[AppendEntriesResultHandle] address not found")
-		return
-	}
+	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~[AppendEntriesResultHandle]", appendEntriesResult)
 
 	// 处理响应
 	if appendEntriesResult.Success {
-		myNode.MatchIndex.Update(conn.RemoteAddr().String(), prevLogIndex)
+		myNode.MatchIndex.Update(conn.RemoteAddr().String(), appendEntriesResult.LastIndex)
+		myNode.UpdateCommitIndex()
 	} else {
-		fmt.Printf("Decrement\n")
+
 		myNode.NextIndex.Update(conn.RemoteAddr().String(), appendEntriesResult.LastIndex+1)
 		if idx, ok := myNode.NextIndex.Get(conn.RemoteAddr().String()); ok && idx < 0 {
 			myNode.NextIndex.Update(conn.RemoteAddr().String(), 0)

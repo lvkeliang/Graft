@@ -3,13 +3,16 @@ package node
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/lvkeliang/Graft/LogEntry"
 	"github.com/lvkeliang/Graft/matchIndex"
 	"github.com/lvkeliang/Graft/nextIndex"
+	"github.com/lvkeliang/Graft/stateMachine"
 	"log"
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"sync"
 	"time"
 )
@@ -65,6 +68,7 @@ type Node struct {
 	ElectionTimer *time.Timer
 	ALLNode       *NodesPool
 	filePath      string
+	StateMachine  stateMachine.StateMachine
 }
 
 type PersistentState struct {
@@ -74,7 +78,7 @@ type PersistentState struct {
 	LastApplied int64
 }
 
-func NewNode(id string, stateFilePath string, logFilePath string) *Node {
+func NewNode(id string, stateFilePath string, logFilePath string, YourStateMachine stateMachine.StateMachine) *Node {
 	logEnt, err := LogEntry.NewLog(logFilePath)
 	if err != nil {
 		log.Printf("[NewNode] init logEntry failed: %v\n", err)
@@ -87,15 +91,16 @@ func NewNode(id string, stateFilePath string, logFilePath string) *Node {
 		CurrentTerm:   0,
 		VoteFor:       "",
 		Log:           logEnt,
-		CommitIndex:   0,
-		LastApplied:   0,
+		CommitIndex:   -1,
+		LastApplied:   -1,
 		NextIndex:     nextIndex.NewNextIndex(),
 		MatchIndex:    matchIndex.NewMatchIndex(),
 		ElectionTimer: time.NewTimer(RandomElectionTimeout()),
 		ALLNode: &NodesPool{
 			Conns: make(map[string]net.Conn),
 		},
-		filePath: stateFilePath,
+		filePath:     stateFilePath,
+		StateMachine: YourStateMachine, // 初始化状态机
 	}
 
 	err = node.load()
@@ -107,9 +112,9 @@ func NewNode(id string, stateFilePath string, logFilePath string) *Node {
 }
 
 // ResetElectionTimer resets the election timer.
-func (r *Node) ResetElectionTimer() {
-	r.ElectionTimer.Stop()
-	r.ElectionTimer.Reset(RandomElectionTimeout())
+func (node *Node) ResetElectionTimer() {
+	node.ElectionTimer.Stop()
+	node.ElectionTimer.Reset(RandomElectionTimeout())
 }
 
 // RandomElectionTimeout generates a random election timeout duration.
@@ -150,8 +155,71 @@ func (node *Node) TermAddOne() {
 	node.persist()
 }
 
-func (node *Node) UpdateCommitIndex(index int64) {
+// UpdateCommitIndex updates the commitIndex based on the matchIndex values.
+func (node *Node) UpdateCommitIndex() {
+
+	matchIndexes := node.MatchIndex.GetAll()
+
+	// Create a slice of all match indexes
+	var indexes []int64
+	for _, idx := range matchIndexes {
+		indexes = append(indexes, idx)
+	}
+
+	// Sort the indexes slice
+	sort.Slice(indexes, func(i, j int) bool {
+		return indexes[i] < indexes[j]
+	})
+
+	// Find the majority match index (the middle value in the sorted list)
+	quorumIndex := indexes[len(indexes)/2]
+
+	fmt.Println("quorumIndex :", quorumIndex)
+
+	if quorumIndex < 0 {
+		return
+	}
+
+	// Check if the quorumIndex can be committed
+	quorumEntry, err := node.Log.Get(quorumIndex)
+	if err != nil {
+		log.Println("[UpdateCommitIndex] failed to find quorumLogEntry: ", quorumEntry)
+		return
+	}
+
+	if quorumIndex > node.CommitIndex && quorumEntry.Term == node.CurrentTerm {
+		node.CommitIndex = quorumIndex
+		// Apply the committed entries to the state machine
+		node.applyLogEntries()
+	}
+
+	node.persist()
+
+}
+
+func (node *Node) applyLogEntries() {
+	for node.LastApplied < node.CommitIndex {
+		node.LastApplied++
+
+		log.Println("LastApplied: ", node.LastApplied)
+		entry, err := node.Log.Get(node.LastApplied)
+		if err != nil {
+			log.Printf("[applyLogEntries] failed to get log entry: %v | with CommitIndex : %v | with LastApplied : %v\n", err, node.CommitIndex, node.LastApplied)
+			return
+		}
+
+		log.Printf("--------------------1-----------------------")
+		result := node.StateMachine.ToApply(entry.Command)
+		fmt.Println("--------------------2-----------------------")
+		log.Printf("[applyLogEntries] Applied command '%s' with result '%s'", entry.Command, result)
+		node.persist()
+	}
+}
+
+// UpdateCommitIndexByLeader updates the commitIndex based on the matchIndex values.
+func (node *Node) UpdateCommitIndexByLeader(index int64) {
 	node.CommitIndex = index
+	node.applyLogEntries()
 	node.persist()
 }
 

@@ -21,6 +21,15 @@ func (index *MatchIndex) Update(nodeId string, entryIdx int64) {
 	index.hashMap[nodeId] = entryIdx
 }
 
+// UpdateIfGreater updates the match index for a given node only if the new index is greater.
+func (index *MatchIndex) UpdateIfGreater(nodeId string, entryIdx int64) {
+	index.mu.Lock()
+	defer index.mu.Unlock()
+	if currentIdx, ok := index.hashMap[nodeId]; !ok || entryIdx > currentIdx {
+		index.hashMap[nodeId] = entryIdx
+	}
+}
+
 // Del removes the match index for a given node.
 func (index *MatchIndex) Del(nodeId string) {
 	index.mu.Lock()
@@ -61,4 +70,32 @@ func (index *MatchIndex) MajorityConfirmed(entryIdx int64) bool {
 
 	// Check if the count is greater than half of the total nodes.
 	return count > len(index.hashMap)/2
+}
+
+// GetMaxMatchIndex returns the highest match index across all nodes.
+func (index *MatchIndex) GetMaxMatchIndex() int64 {
+	index.mu.RLock()
+	defer index.mu.RUnlock()
+
+	var maxIdx int64 = -1
+	for _, idx := range index.hashMap {
+		if idx > maxIdx {
+			maxIdx = idx
+		}
+	}
+	return maxIdx
+}
+
+// GetMinMatchIndex returns the lowest match index across all nodes.
+func (index *MatchIndex) GetMinMatchIndex() int64 {
+	index.mu.RLock()
+	defer index.mu.RUnlock()
+
+	var minIdx int64 = -1
+	for _, idx := range index.hashMap {
+		if minIdx == -1 || idx < minIdx {
+			minIdx = idx
+		}
+	}
+	return minIdx
 }

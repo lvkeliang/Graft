@@ -1,5 +1,5 @@
 package stateMachine
 
 type StateMachine interface {
-	ToApply(string) string
+	ToApply(string interface{}) interface{}
 }

@@ -1,6 +1,7 @@
 package RPC
 
 import (
+	"fmt"
 	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
@@ -44,12 +45,16 @@ func Handle(conn net.Conn, myNode *node.Node) {
 		case 1:
 			// Handle AppendEntries message
 			AppendEntriesHandle(conn, myNode, length)
+			fmt.Println("消息类型：1")
 		case 2:
 			AppendEntriesResultHandle(conn, myNode, length)
+			fmt.Println("消息类型：2")
 		case 3:
 			RequestVoteHandle(conn, myNode, length)
+			fmt.Println("消息类型：3")
 		case 4:
 			RequestVoteResultHandle(conn, myNode, length)
+			fmt.Println("消息类型：4")
 		default:
 			log.Println("[Handle] Unknown message type:", msgType[0])
 			//buf := make([]byte, length)
