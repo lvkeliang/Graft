@@ -42,17 +42,17 @@ func Handle(conn net.Conn, myNode *node.Node) {
 		length := protocol.BytesToInt(lengthByte)
 
 		switch msgType[0] {
-		case 1:
+		case protocol.AppendEntriesMark:
 			// Handle AppendEntries message
 			AppendEntriesHandle(conn, myNode, length)
 			fmt.Println("消息类型：1")
-		case 2:
+		case protocol.AppendEntriesResultMark:
 			AppendEntriesResultHandle(conn, myNode, length)
 			fmt.Println("消息类型：2")
-		case 3:
+		case protocol.RequestVoteMark:
 			RequestVoteHandle(conn, myNode, length)
 			fmt.Println("消息类型：3")
-		case 4:
+		case protocol.RequestVoteResultMark:
 			RequestVoteResultHandle(conn, myNode, length)
 			fmt.Println("消息类型：4")
 		default:

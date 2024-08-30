@@ -27,7 +27,7 @@ func (ae *AppendEntries) Marshal() ([]byte, error) {
 	modifiedData := make([]byte, len(marshalAE)+3)
 
 	// Set the first byte to indicate AppendEntries message type (00000001)
-	modifiedData[0] = 1
+	modifiedData[0] = AppendEntriesMark
 
 	// 长度字节
 	copy(modifiedData[1:3], IntToBytes(len(marshalAE)))
@@ -59,7 +59,7 @@ func (aer *AppendEntriesResult) Marshal() ([]byte, error) {
 	modifiedData := make([]byte, len(marshalAER)+3)
 
 	// Set the first byte to indicate AppendEntries message type (00000001)
-	modifiedData[0] = 2
+	modifiedData[0] = AppendEntriesResultMark
 
 	// 长度字节
 	copy(modifiedData[1:3], IntToBytes(len(marshalAER)))

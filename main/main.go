@@ -15,8 +15,8 @@ import (
 
 var myNode *node.Node
 
-const RPCPort = "256"
-const HTTPPort = "1256"
+const RPCPort = "253"
+const HTTPPort = "1253"
 
 func main() {
 
@@ -27,7 +27,7 @@ func main() {
 		}
 	}()
 
-	Init([]string{"localhost:253", "localhost:255", "localhost:254"})
+	Init([]string{"localhost:254", "localhost:256", "localhost:255"})
 
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)

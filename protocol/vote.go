@@ -19,7 +19,7 @@ func (rv *RequestVote) Marshal() ([]byte, error) {
 	modifiedData := make([]byte, len(marshalRV)+3)
 
 	// Set the first byte to indicate AppendEntries message type (00000001)
-	modifiedData[0] = 3
+	modifiedData[0] = RequestVoteMark
 
 	copy(modifiedData[1:3], IntToBytes(len(marshalRV)))
 
@@ -48,7 +48,7 @@ func (rvr *RequestVoteResult) Marshal() ([]byte, error) {
 	modifiedData := make([]byte, len(marshalRVR)+3)
 
 	// Set the first byte to indicate AppendEntries message type (00000001)
-	modifiedData[0] = 4
+	modifiedData[0] = RequestVoteResultMark
 
 	copy(modifiedData[1:3], IntToBytes(len(marshalRVR)))
 
