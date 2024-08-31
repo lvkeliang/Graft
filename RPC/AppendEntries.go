@@ -26,12 +26,13 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 				continue
 			}
 			myNode.ALLNode.Lock()
-			for address, conn := range myNode.ALLNode.Conns {
+			for address, nodeConn := range myNode.ALLNode.Conns {
+				conn := nodeConn.Conn
 
 				appendEntries := protocol.NewAppendEntries()
 				appendEntries = &protocol.AppendEntries{
 					Term:         myNode.CurrentTerm,
-					LeaderID:     myNode.ID,
+					LeaderID:     myNode.RPCListenPort,
 					LeaderCommit: myNode.CommitIndex,
 				}
 

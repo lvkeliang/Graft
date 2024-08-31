@@ -15,8 +15,8 @@ import (
 
 var myNode *node.Node
 
-const RPCPort = "253"
-const HTTPPort = "1253"
+const RPCPort = "256"
+const HTTPPort = "1256"
 
 func main() {
 
@@ -27,7 +27,8 @@ func main() {
 		}
 	}()
 
-	Init([]string{"localhost:254", "localhost:256", "localhost:255"})
+	//Init([]string{"localhost:254", "localhost:256", "localhost:255"})
+	Init([]string{"localhost:255"})
 
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)
@@ -44,17 +45,15 @@ func main() {
 }
 
 func Init(address []string) {
-	myNode = node.NewNode("1", "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
+	myNode = node.NewNode(RPCPort, "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
 
 	for _, addr := range address {
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			log.Printf("[connect] connetct to node %v failed\n", addr)
-			continue
+		conn := myNode.Connect(addr)
+		if conn != nil {
+			RPC.StartHandShake("send", conn, myNode)
+			go RPC.Handle(conn, myNode)
 		}
 
-		myNode.AddNode(conn)
-		go RPC.Handle(conn, myNode)
 	}
 }
 
@@ -70,7 +69,6 @@ func StartServer(port string) error {
 	for {
 		conn, err := ln.Accept()
 		// ip := conn.RemoteAddr().String()
-		myNode.AddNode(conn)
 		if err != nil {
 			log.Printf("[server] accept dial failed\n")
 			return errors.New("accept dial failed")
@@ -78,7 +76,7 @@ func StartServer(port string) error {
 
 		// log.Printf("[server] serving to %v\n", ip)
 		// log.Printf("[server] nodes now: %v\n", myNode.ALLNode.Conns)
-
+		RPC.StartHandShake("listen", conn, myNode)
 		go RPC.Handle(conn, myNode)
 	}
 }
@@ -98,21 +96,21 @@ func termWatcher() {
 	}
 }
 
-func inputNode() {
-	for {
-		addr := ""
-		fmt.Scan(&addr)
-
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			log.Printf("[connect] connetct to node %v failed\n", addr)
-			continue
-		}
-
-		myNode.ALLNode.Add(conn)
-		go RPC.Handle(conn, myNode)
-	}
-}
+//func inputNode() {
+//	for {
+//		addr := ""
+//		fmt.Scan(&addr)
+//
+//		conn, err := net.Dial("tcp", addr)
+//		if err != nil {
+//			log.Printf("[connect] connetct to node %v failed\n", addr)
+//			continue
+//		}
+//
+//		myNode.ALLNode.Add(conn)
+//		go RPC.Handle("send", conn, myNode)
+//	}
+//}
 
 // startHTTPServer 启动HTTP服务器并处理日志添加请求
 func startHTTPServer(port string) {

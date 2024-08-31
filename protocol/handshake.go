@@ -15,7 +15,6 @@ func (hs *Handshake) Marshal() ([]byte, error) {
 	marshalHS, err := json.Marshal(hs)
 	modifiedData := make([]byte, len(marshalHS)+3)
 
-	// Set the first byte to indicate AppendEntries message type (00000001)
 	modifiedData[0] = HandShakeMark
 
 	// 长度字节
@@ -32,7 +31,12 @@ func (hs *Handshake) UNMarshal(strhs []byte) error {
 }
 
 type HandshakeResult struct {
-	Result string
+	NodeAddresses []string
+	Result        string
+}
+
+func NewHandshakeResult() *HandshakeResult {
+	return &HandshakeResult{}
 }
 
 // Marshal HandshakeResult 首字节标识为0

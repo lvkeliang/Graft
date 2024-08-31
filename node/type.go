@@ -25,16 +25,26 @@ const (
 	FOLLOWER
 )
 
+type nodeConn struct {
+	RPCListenAddress string
+	Conn             net.Conn
+}
+
+func NewNodeConn(RPCListenAddress string, conn net.Conn) nodeConn {
+	return nodeConn{RPCListenAddress: RPCListenAddress, Conn: conn}
+}
+
 type NodesPool struct {
 	sync.Mutex
-	Conns map[string]net.Conn
+	Conns map[string]nodeConn
 	Count int64
 }
 
-func (pool *NodesPool) Add(conn net.Conn) {
+func (pool *NodesPool) Add(RPCListenAddress string, conn net.Conn) {
 	pool.Lock()
 	defer pool.Unlock()
-	pool.Conns[conn.RemoteAddr().String()] = conn
+
+	pool.Conns[conn.RemoteAddr().String()] = NewNodeConn(RPCListenAddress, conn)
 	pool.Count++
 }
 
@@ -44,7 +54,16 @@ func (pool *NodesPool) Get(address string) net.Conn {
 	if pool.Count == 0 {
 		return nil
 	}
-	return pool.Conns[address]
+	return pool.Conns[address].Conn
+}
+
+func (pool *NodesPool) GetRPCListenAddress(address string) string {
+	pool.Lock()
+	defer pool.Unlock()
+	if pool.Count == 0 {
+		return ""
+	}
+	return pool.Conns[address].RPCListenAddress
 }
 
 func (pool *NodesPool) Remove(conn net.Conn) {
@@ -54,9 +73,25 @@ func (pool *NodesPool) Remove(conn net.Conn) {
 	pool.Count--
 }
 
+func (pool *NodesPool) GetALLRPCListenAddresses() []string {
+	pool.Lock()
+	defer pool.Unlock()
+	if pool.Count == 0 {
+		return nil
+	}
+
+	var addresses []string
+
+	for _, connAddr := range pool.Conns {
+		addresses = append(addresses, connAddr.RPCListenAddress)
+	}
+
+	return addresses
+}
+
 type Node struct {
 	Mu            sync.Mutex
-	ID            string
+	RPCListenPort string
 	Status        StateOfNode
 	CurrentTerm   int64
 	VoteFor       string
@@ -78,7 +113,7 @@ type PersistentState struct {
 	LastApplied int64
 }
 
-func NewNode(id string, stateFilePath string, logFilePath string, YourStateMachine stateMachine.StateMachine) *Node {
+func NewNode(RPCListenPort string, stateFilePath string, logFilePath string, YourStateMachine stateMachine.StateMachine) *Node {
 	logEnt, err := LogEntry.NewLog(logFilePath)
 	if err != nil {
 		log.Printf("[NewNode] init logEntry failed: %v\n", err)
@@ -86,7 +121,7 @@ func NewNode(id string, stateFilePath string, logFilePath string, YourStateMachi
 	}
 
 	node := &Node{
-		ID:            id,
+		RPCListenPort: RPCListenPort,
 		Status:        FOLLOWER,
 		CurrentTerm:   0,
 		VoteFor:       "",
@@ -97,7 +132,7 @@ func NewNode(id string, stateFilePath string, logFilePath string, YourStateMachi
 		MatchIndex:    matchIndex.NewMatchIndex(),
 		ElectionTimer: time.NewTimer(RandomElectionTimeout()),
 		ALLNode: &NodesPool{
-			Conns: make(map[string]net.Conn),
+			Conns: make(map[string]nodeConn),
 		},
 		filePath:     stateFilePath,
 		StateMachine: YourStateMachine, // 初始化状态机
@@ -122,8 +157,24 @@ func RandomElectionTimeout() time.Duration {
 	return time.Duration(5000+rand.Intn(1500)) * time.Millisecond
 }
 
-func (node *Node) AddNode(conn net.Conn) {
-	node.ALLNode.Add(conn)
+func (node *Node) Connect(address string) net.Conn {
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		log.Printf("[connect] connetct to node %v failed\n", address)
+		return nil
+	}
+
+	return conn
+}
+
+func (node *Node) AddNode(RPCListenPort string, conn net.Conn) {
+	conn.RemoteAddr().String()
+	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		return
+	}
+
+	node.ALLNode.Add(host+":"+RPCListenPort, conn)
 	node.MatchIndex.Update(conn.RemoteAddr().String(), -1)
 	node.NextIndex.Update(conn.RemoteAddr().String(), -1)
 }

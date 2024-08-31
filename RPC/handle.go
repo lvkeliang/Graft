@@ -8,14 +8,29 @@ import (
 	"net"
 )
 
+func readHeader(conn net.Conn, myNode *node.Node) (msgType byte, length int, err error) {
+	msgTypeReader := make([]byte, 1)
+	_, err = conn.Read(msgTypeReader)
+	if err != nil {
+		log.Println("[Handle] Error reading message type:", err)
+		myNode.RemoveNode(conn)
+		return 0, 0, err
+	}
+
+	lengthByte := make([]byte, 2)
+	_, err = conn.Read(lengthByte)
+	if err != nil {
+		log.Println("[Handle] Error reading message lengthByte:", err)
+		myNode.RemoveNode(conn)
+		return 0, 0, err
+	}
+
+	msgType = msgTypeReader[0]
+	length = protocol.BytesToInt(lengthByte)
+	return msgType, length, nil
+}
+
 func Handle(conn net.Conn, myNode *node.Node) {
-	defer func(conn net.Conn) {
-		err := conn.Close()
-		if err != nil {
-			log.Println("[Handle] conn close error")
-			return
-		}
-	}(conn)
 
 	for {
 		//buf := make([]byte, 1024*5)
@@ -23,25 +38,13 @@ func Handle(conn net.Conn, myNode *node.Node) {
 		//log.Println("Unknown type message:", string(buf[:n]))
 
 		// Read the first byte to determine the message type
-		msgType := make([]byte, 1)
-		_, err := conn.Read(msgType)
+		msgType, length, err := readHeader(conn, myNode)
 		if err != nil {
-			log.Println("[Handle] Error reading message type:", err)
-			myNode.RemoveNode(conn)
+			log.Println("[Handle] ReadHeader Failed")
 			return
 		}
 
-		lengthByte := make([]byte, 2)
-		_, err = conn.Read(lengthByte)
-		if err != nil {
-			log.Println("[Handle] Error reading message lengthByte:", err)
-			myNode.RemoveNode(conn)
-			return
-		}
-
-		length := protocol.BytesToInt(lengthByte)
-
-		switch msgType[0] {
+		switch msgType {
 		case protocol.AppendEntriesMark:
 			// Handle AppendEntries message
 			AppendEntriesHandle(conn, myNode, length)
@@ -56,7 +59,10 @@ func Handle(conn net.Conn, myNode *node.Node) {
 			RequestVoteResultHandle(conn, myNode, length)
 			fmt.Println("消息类型：4")
 		default:
-			log.Println("[Handle] Unknown message type:", msgType[0])
+			log.Println("[Handle] Unknown message type:", msgType)
+			// 遗弃接下来的消息
+			msgTypeReader := make([]byte, 1024)
+			_, err = conn.Read(msgTypeReader)
 			//buf := make([]byte, length)
 			//n, _ := conn.Read(buf)
 			//log.Println("Unknown type message:", string(buf[:n]))

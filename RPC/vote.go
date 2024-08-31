@@ -151,7 +151,8 @@ func RequestVote(myNode *node.Node) {
 		return
 	}
 
-	for _, conn := range myNode.ALLNode.Conns {
+	for _, nodeConn := range myNode.ALLNode.Conns {
+		conn := nodeConn.Conn
 		_, err = conn.Write(marshalRV)
 		if err != nil {
 			log.Println("[RequestVote] send requestVot failed")
@@ -204,7 +205,7 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, length int) {
 		if request.LastLogTerm > lastTerm || (request.LastLogTerm == lastTerm && request.LastLogIndex >= lastIndex) {
 			res.VoteGranted = true
 
-			fmt.Printf("VoteGranted to : %v\n", conn.RemoteAddr())
+			fmt.Printf("VoteGranted to : %v\n", myNode.ALLNode.GetRPCListenAddress(conn.RemoteAddr().String()))
 
 			// 标记已投票
 			err = myNode.SetVoteFor(conn)
