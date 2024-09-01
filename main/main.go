@@ -1,84 +1,39 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"github.com/lvkeliang/Graft/RPC"
 	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/stateMachine"
 	"log"
-	"net"
 	"net/http"
 	"time"
 )
 
 var myNode *node.Node
 
-const RPCPort = "256"
-const HTTPPort = "1256"
+const RPCPort = "255"
+const HTTPPort = "1255"
 
 func main() {
+	// 创建节点实例
+	myNode = node.NewNode(RPCPort, "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
 
-	go func() {
-		err := StartServer(":" + RPCPort)
-		if err != nil {
-			return
-		}
-	}()
+	// 启动RPC服务器
+	err := myNode.StartServer(":" + RPCPort)
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 
-	//Init([]string{"localhost:254", "localhost:256", "localhost:255"})
-	Init([]string{"localhost:253"})
+	// 初始化节点
+	myNode.Connect([]string{"localhost:256"})
 
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)
 
 	go termWatcher()
-	go RPC.StartElection(context.Background(), myNode)
 
-	//for i := 1; i < 10; i++ {
-	//	myNode.Log.AddLog(myNode.CurrentTerm, "Set x = "+fmt.Sprintf("%d", i))
-	//}
-
-	RPC.StartAppendEntries(context.Background(), myNode)
-
-}
-
-func Init(address []string) {
-	myNode = node.NewNode(RPCPort, "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
-
-	for _, addr := range address {
-		conn := myNode.Connect(addr)
-		if conn != nil {
-			RPC.StartHandShake("send", conn, myNode)
-			go RPC.Handle(conn, myNode)
-		}
-
-	}
-}
-
-func StartServer(port string) error {
-	ln, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Printf("[server] start serve on port %v failed:%v\n", port, err.Error())
-		return errors.New("start serve failed")
-	}
-
-	log.Printf("[server] serving on port %v\n", port)
-
-	for {
-		conn, err := ln.Accept()
-		// ip := conn.RemoteAddr().String()
-		if err != nil {
-			log.Printf("[server] accept dial failed\n")
-			return errors.New("accept dial failed")
-		}
-
-		// log.Printf("[server] serving to %v\n", ip)
-		// log.Printf("[server] nodes now: %v\n", myNode.ALLNode.Conns)
-		RPC.StartHandShake("listen", conn, myNode)
-		go RPC.Handle(conn, myNode)
-	}
+	var sleep chan bool
+	<-sleep
 }
 
 func termWatcher() {

@@ -1,14 +1,13 @@
-package RPC
+package node
 
 import (
 	"fmt"
-	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
 )
 
-func readHeader(conn net.Conn, myNode *node.Node) (msgType byte, length int, err error) {
+func readHeader(conn net.Conn, myNode *Node) (msgType byte, length int, err error) {
 	msgTypeReader := make([]byte, 1)
 	_, err = conn.Read(msgTypeReader)
 	if err != nil {
@@ -30,7 +29,7 @@ func readHeader(conn net.Conn, myNode *node.Node) (msgType byte, length int, err
 	return msgType, length, nil
 }
 
-func Handle(conn net.Conn, myNode *node.Node) {
+func Handle(conn net.Conn, myNode *Node) {
 
 	for {
 		//buf := make([]byte, 1024*5)

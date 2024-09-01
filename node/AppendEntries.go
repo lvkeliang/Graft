@@ -1,9 +1,8 @@
-package RPC
+package node
 
 import (
 	"context"
 	"fmt"
-	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
@@ -13,7 +12,7 @@ import (
 // 用于将收到的leaderHeartbeat传递给vote相关
 var leaderHeartbeat = make(chan int64)
 
-func StartAppendEntries(ctx context.Context, myNode *node.Node) {
+func StartAppendEntries(ctx context.Context, myNode *Node) {
 	ticker := time.NewTicker(5000 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -22,7 +21,7 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if myNode.Status != node.LEADER {
+			if myNode.Status != LEADER {
 				continue
 			}
 			myNode.ALLNode.Lock()
@@ -107,7 +106,7 @@ func StartAppendEntries(ctx context.Context, myNode *node.Node) {
 	}
 }
 
-func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
+func AppendEntriesHandle(conn net.Conn, myNode *Node, length int) {
 	// Read data from the connection
 	buf := make([]byte, length)
 	n, err := conn.Read(buf)
@@ -186,7 +185,7 @@ func AppendEntriesHandle(conn net.Conn, myNode *node.Node, length int) {
 	fmt.Println("[AppendEntriesHandle] sent:", res)
 }
 
-func AppendEntriesResultHandle(conn net.Conn, myNode *node.Node, length int) {
+func AppendEntriesResultHandle(conn net.Conn, myNode *Node, length int) {
 
 	// Read data from the connection
 	buf := make([]byte, length)

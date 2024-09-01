@@ -157,16 +157,6 @@ func RandomElectionTimeout() time.Duration {
 	return time.Duration(5000+rand.Intn(1500)) * time.Millisecond
 }
 
-func (node *Node) Connect(address string) net.Conn {
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		log.Printf("[connect] connetct to node %v failed\n", address)
-		return nil
-	}
-
-	return conn
-}
-
 func (node *Node) AddNode(RPCListenPort string, conn net.Conn) {
 	conn.RemoteAddr().String()
 	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())

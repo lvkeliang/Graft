@@ -1,15 +1,14 @@
-package RPC
+package node
 
 import (
 	"errors"
 	"fmt"
-	"github.com/lvkeliang/Graft/node"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
 )
 
-func SendHandshake(myNode *node.Node, conn net.Conn) error {
+func SendHandshake(myNode *Node, conn net.Conn) error {
 	// 发送当前节点的监听端口信息到服务器
 
 	handshake := protocol.NewHandshake()
@@ -39,7 +38,7 @@ func SendHandshake(myNode *node.Node, conn net.Conn) error {
 	return nil
 }
 
-func HandshakeHandle(conn net.Conn, myNode *node.Node, length int) error {
+func HandshakeHandle(conn net.Conn, myNode *Node, length int) error {
 	buf := make([]byte, length)
 	n, err := conn.Read(buf)
 	if err != nil {
@@ -84,7 +83,7 @@ func HandshakeHandle(conn net.Conn, myNode *node.Node, length int) error {
 	return nil
 }
 
-func HandshakeHandleResult(conn net.Conn, myNode *node.Node, length int) error {
+func HandshakeHandleResult(conn net.Conn, myNode *Node, length int) error {
 	buf := make([]byte, length)
 	n, err := conn.Read(buf)
 	if err != nil {
@@ -116,7 +115,12 @@ func HandshakeHandleResult(conn net.Conn, myNode *node.Node, length int) error {
 			fmt.Println("Addresses: ", myNode.ALLNode.Conns)
 			fmt.Println("CONNECT TO : ", addr)
 
-			newConn := myNode.Connect(addr)
+			newConn, err := connectToAddress(addr)
+			if err != nil {
+				log.Printf("[connect] connetct to node %v failed\n", addr)
+				return err
+			}
+
 			if newConn != nil {
 				StartHandShake("send", newConn, myNode)
 				go Handle(newConn, myNode)
@@ -127,7 +131,7 @@ func HandshakeHandleResult(conn net.Conn, myNode *node.Node, length int) error {
 	return nil
 }
 
-func StartHandShake(handshakeMode string, conn net.Conn, myNode *node.Node) error {
+func StartHandShake(handshakeMode string, conn net.Conn, myNode *Node) error {
 
 	if handshakeMode == "send" {
 		err := SendHandshake(myNode, conn)
