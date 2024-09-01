@@ -30,14 +30,14 @@ func (node *Node) Connect(addresses []string) {
 	}
 }
 
-func (node *Node) StartServer(port string) error {
-	ln, err := net.Listen("tcp", port)
+func (node *Node) StartServer() error {
+	ln, err := net.Listen("tcp", node.RPCListenPort)
 	if err != nil {
-		log.Printf("[server] start serve on port %v failed:%v\n", port, err.Error())
+		log.Printf("[server] start serve on port %v failed:%v\n", node.RPCListenPort, err.Error())
 		return errors.New("start serve failed")
 	}
 
-	log.Printf("[server] serving on port %v\n", port)
+	log.Printf("[server] serving on port %v\n", node.RPCListenPort)
 
 	// 启动选举进程
 	go StartElection(context.Background(), node)

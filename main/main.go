@@ -11,21 +11,21 @@ import (
 
 var myNode *Graft.Node
 
-const RPCPort = "255"
-const HTTPPort = "1255"
+const RPCPort = "253"
+const HTTPPort = "1253"
 
 func main() {
 	// 创建节点实例
 	myNode = Graft.NewNode(RPCPort, "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
 
 	// 启动RPC服务器
-	err := myNode.StartServer(":" + RPCPort)
+	err := myNode.StartServer()
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 
 	// 初始化节点
-	myNode.Connect([]string{"localhost:256"})
+	myNode.Connect([]string{"localhost:254"})
 
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)

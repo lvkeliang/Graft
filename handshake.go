@@ -110,7 +110,7 @@ func HandshakeHandleResult(conn net.Conn, myNode *Node, length int) error {
 	for _, addr := range handshakeResult.NodeAddresses {
 		//fmt.Println("GETADDRESS : ", addr)
 
-		if addr != "" && addr != "127.0.0.1:"+myNode.RPCListenPort && myNode.ALLNode.Get(addr) == nil {
+		if addr != "" && addr != "127.0.0.1"+myNode.RPCListenPort && myNode.ALLNode.Get(addr) == nil {
 			fmt.Println("GetALLRPCListenAddresses: ", myNode.ALLNode.GetALLRPCListenAddresses())
 			fmt.Println("Addresses: ", myNode.ALLNode.Conns)
 			fmt.Println("CONNECT TO : ", addr)

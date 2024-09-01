@@ -120,6 +120,10 @@ func NewNode(RPCListenPort string, stateFilePath string, logFilePath string, You
 		return nil
 	}
 
+	if RPCListenPort[0] != ':' {
+		RPCListenPort = ":" + RPCListenPort
+	}
+
 	node := &Node{
 		RPCListenPort: RPCListenPort,
 		Status:        FOLLOWER,
@@ -164,7 +168,11 @@ func (node *Node) AddNode(RPCListenPort string, conn net.Conn) {
 		return
 	}
 
-	node.ALLNode.Add(host+":"+RPCListenPort, conn)
+	if RPCListenPort[0] != ':' {
+		RPCListenPort = ":" + RPCListenPort
+	}
+
+	node.ALLNode.Add(host+RPCListenPort, conn)
 	node.MatchIndex.Update(conn.RemoteAddr().String(), -1)
 	node.NextIndex.Update(conn.RemoteAddr().String(), -1)
 }

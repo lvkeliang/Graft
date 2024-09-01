@@ -99,8 +99,13 @@ func StartElection(ctx context.Context, myNode *Node) {
 			if myNode.Status == FOLLOWER {
 				// 重置选举计时器
 				myNode.ResetElectionTimer()
-			}
-			if myNode.Status == CANDIDATE && candidateTerm > myNode.CurrentTerm {
+			} else if myNode.Status == CANDIDATE && candidateTerm > myNode.CurrentTerm {
+				// 重置选举计时器
+				myNode.ResetElectionTimer()
+				//将自己的state置为follower
+				myNode.Status = FOLLOWER
+				fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
+			} else if myNode.Status == LEADER && candidateTerm > myNode.CurrentTerm {
 				// 重置选举计时器
 				myNode.ResetElectionTimer()
 				//将自己的state置为follower
