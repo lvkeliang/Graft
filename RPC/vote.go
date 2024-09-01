@@ -15,7 +15,7 @@ import (
 var voteAccept = make(chan bool)
 
 // 创建一个用于作为follower接收到竞选请求时，抑制成为candidate的通道
-var receivedVoteRequest = make(chan bool)
+var receivedVoteRequest = make(chan int64)
 
 // 生成介于 min 和 max 微秒之间的随机持续时间的辅助函数
 func randomDuration(min, max int) time.Duration {
@@ -60,18 +60,19 @@ func StartElection(ctx context.Context, myNode *node.Node) {
 				go collectVoteResults(timerCtx, myNode)
 				RequestVote(myNode)
 			case node.CANDIDATE:
-				//该term内没有选举出leader
+				//该term内没有收到足够票数
 				// 重置选举计时器
 				myNode.ResetElectionTimer()
 
-				// 转换为 Candidate
-				myNode.Status = node.CANDIDATE
+				if myNode.ALLNode.Count > 0 {
+					myNode.TermAddOne()
 
-				// 重发vote请求
-				var timerCtx context.Context
-				timerCtx, cancel = context.WithCancel(context.Background())
-				go collectVoteResults(timerCtx, myNode)
-				RequestVote(myNode)
+					// 重发vote请求
+					var timerCtx context.Context
+					timerCtx, cancel = context.WithCancel(context.Background())
+					go collectVoteResults(timerCtx, myNode)
+					RequestVote(myNode)
+				}
 
 			case node.LEADER:
 				myNode.ResetElectionTimer()
@@ -94,11 +95,18 @@ func StartElection(ctx context.Context, myNode *node.Node) {
 
 			// 重置选举计时器
 			myNode.ResetElectionTimer()
-		case <-receivedVoteRequest:
+		case candidateTerm := <-receivedVoteRequest:
 			// 接受Vote请求后抑制成为candidate
 			if myNode.Status == node.FOLLOWER {
 				// 重置选举计时器
 				myNode.ResetElectionTimer()
+			}
+			if myNode.Status == node.CANDIDATE && candidateTerm > myNode.CurrentTerm {
+				// 重置选举计时器
+				myNode.ResetElectionTimer()
+				//将自己的state置为follower
+				myNode.Status = node.FOLLOWER
+				fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 			}
 		}
 	}
@@ -229,7 +237,7 @@ func RequestVoteHandle(conn net.Conn, myNode *node.Node, length int) {
 
 	// 抑制成为candidate
 	if res.VoteGranted == true {
-		receivedVoteRequest <- true
+		receivedVoteRequest <- res.Term
 	}
 
 }

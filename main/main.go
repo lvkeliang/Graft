@@ -28,7 +28,7 @@ func main() {
 	}()
 
 	//Init([]string{"localhost:254", "localhost:256", "localhost:255"})
-	Init([]string{"localhost:255"})
+	Init([]string{"localhost:253"})
 
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)
