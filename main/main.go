@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
-	"github.com/lvkeliang/Graft/node"
+	"github.com/lvkeliang/Graft"
 	"github.com/lvkeliang/Graft/stateMachine"
 	"log"
 	"net/http"
 	"time"
 )
 
-var myNode *node.Node
+var myNode *Graft.Node
 
 const RPCPort = "255"
 const HTTPPort = "1255"
 
 func main() {
 	// 创建节点实例
-	myNode = node.NewNode(RPCPort, "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
+	myNode = Graft.NewNode(RPCPort, "node_state"+RPCPort+".json", "node"+RPCPort+"log.gob", stateMachine.NewSimpleStateMachine(RPCPort+".txt"))
 
 	// 启动RPC服务器
 	err := myNode.StartServer(":" + RPCPort)
