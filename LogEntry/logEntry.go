@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-const MaxSendLogNum = 2
+const MaxSendLogNum = 200
 
 // LogEntry represents a single entry in the Raft log.
 type LogEntry struct {
@@ -88,7 +88,7 @@ func (l *Log) load() error {
 	return nil
 }
 
-func (l *Log) AddLog(term int64, command string) {
+func (l *Log) AddLog(term int64, command interface{}) {
 
 	l.Append(LogEntry{
 		Index:   l.LastIndex() + 1,
@@ -166,7 +166,6 @@ func (l *Log) Get(index int64) (*LogEntry, error) {
 }
 
 func (l *Log) GetAfterIndex(index int64) ([]LogEntry, error) {
-	fmt.Println("GetRange : ", index)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

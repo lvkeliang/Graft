@@ -2,11 +2,9 @@ package Graft
 
 import (
 	"context"
-	"fmt"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
-	"time"
 )
 
 type leaderHeartbeat struct {
@@ -18,15 +16,16 @@ type leaderHeartbeat struct {
 var leaderHeartbeatChan = make(chan leaderHeartbeat)
 
 func StartAppendEntries(ctx context.Context, myNode *Node) {
-	ticker := time.NewTicker(5000 * time.Millisecond)
-	defer ticker.Stop()
+	defer myNode.AppendEntriesTimer.Stop()
+	myNode.ResetAppendEntriesTimer()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-myNode.AppendEntriesTimer.C:
 			if myNode.Status != LEADER {
+				myNode.ResetAppendEntriesTimer()
 				continue
 			}
 			myNode.ALLNode.Lock()
@@ -46,6 +45,7 @@ func StartAppendEntries(ctx context.Context, myNode *Node) {
 
 				if !ok {
 					log.Println("[StartAppendEntries] nextIndex address not found")
+					myNode.ResetAppendEntriesTimer()
 					continue
 				}
 
@@ -53,6 +53,7 @@ func StartAppendEntries(ctx context.Context, myNode *Node) {
 					prevLogEntry, err := myNode.Log.Get(prevLogIndex)
 					if err != nil {
 						log.Printf("[StartAppendEntries] get prevLogIndex log index out of range: %v\n", prevLogIndex)
+						myNode.ResetAppendEntriesTimer()
 						continue
 					}
 					appendEntries.PrevLogIndex = prevLogIndex
@@ -77,6 +78,7 @@ func StartAppendEntries(ctx context.Context, myNode *Node) {
 					index, err := myNode.Log.GetAfterIndex(nextLogIndex)
 					if err != nil {
 						log.Printf("[StartAppendEntries] getAfterIndex index out of range: %v\n", nextLogIndex)
+						myNode.ResetAppendEntriesTimer()
 						continue
 					}
 					appendEntries.Entries = index
@@ -87,6 +89,7 @@ func StartAppendEntries(ctx context.Context, myNode *Node) {
 				// fmt.Println(string(marshalAE))
 				if err != nil {
 					log.Println("[StartAppendEntries] appendEntries.Marshal failed", err)
+					myNode.ResetAppendEntriesTimer()
 					continue
 				}
 
@@ -94,6 +97,7 @@ func StartAppendEntries(ctx context.Context, myNode *Node) {
 				if err != nil {
 					log.Println("[StartAppendEntries] send marshalAE failed: ", err)
 					myNode.RemoveNode(conn)
+					myNode.ResetAppendEntriesTimer()
 					continue
 				}
 
@@ -102,12 +106,12 @@ func StartAppendEntries(ctx context.Context, myNode *Node) {
 					//fmt.Printf("update nextLogIndex: %v\n", appendEntries.Entries[len(appendEntries.Entries)-1].Index+1)
 				}
 
-				fmt.Println("[AppendEntries] MatchIndex: ", myNode.MatchIndex.GetAll())
+				//fmt.Println("[AppendEntries] MatchIndex: ", myNode.MatchIndex.GetAll())
 			}
 			myNode.ALLNode.Unlock()
 		}
 
-		ticker.Reset(5000 * time.Millisecond)
+		myNode.ResetAppendEntriesTimer()
 	}
 }
 
@@ -157,7 +161,7 @@ func AppendEntriesHandle(conn net.Conn, myNode *Node, length int) {
 		if appendEntries.Entries != nil {
 			// 添加日志条目
 			myNode.Log.AppendEntries(appendEntries.Entries)
-			fmt.Printf("[AppendEntriesHandle] appendEntries.LeaderCommit: %v | myNode.CommitIndex: %v | LastIndex: %v\n", appendEntries.LeaderCommit, myNode.CommitIndex, myNode.Log.LastIndex())
+			//fmt.Printf("[AppendEntriesHandle] appendEntries.LeaderCommit: %v | myNode.CommitIndex: %v | LastIndex: %v\n", appendEntries.LeaderCommit, myNode.CommitIndex, myNode.Log.LastIndex())
 		}
 
 		// 更新 commitIndex 和 lastApplied
@@ -177,7 +181,7 @@ func AppendEntriesHandle(conn net.Conn, myNode *Node, length int) {
 
 	res.Term = myNode.CurrentTerm
 
-	fmt.Println(myNode.Log.Entries)
+	//fmt.Println(myNode.Log.Entries)
 	marshalRes, err := res.Marshal()
 	if err != nil {
 		log.Println("[AppendEntriesHandle] Error marshaling res:", err)
@@ -190,7 +194,7 @@ func AppendEntriesHandle(conn net.Conn, myNode *Node, length int) {
 		return
 	}
 
-	fmt.Println("[AppendEntriesHandle] sent:", res)
+	//fmt.Println("[AppendEntriesHandle] sent:", res)
 }
 
 func AppendEntriesResultHandle(conn net.Conn, myNode *Node, length int) {
@@ -210,8 +214,6 @@ func AppendEntriesResultHandle(conn net.Conn, myNode *Node, length int) {
 		log.Println("[AppendEntriesResultHandle] Error unmarshaling data:", err)
 		return
 	}
-
-	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~[AppendEntriesResultHandle]", appendEntriesResult)
 
 	// 处理响应
 	if appendEntriesResult.Success {

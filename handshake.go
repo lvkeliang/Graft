@@ -2,7 +2,6 @@ package Graft
 
 import (
 	"errors"
-	"fmt"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
@@ -46,8 +45,8 @@ func HandshakeHandle(conn net.Conn, myNode *Node, length int) error {
 		return err
 	}
 
-	nodeInfo := string(buf[:n])
-	log.Println("[HandshakeHandle] Received node info:", nodeInfo)
+	//nodeInfo := string(buf[:n])
+	//log.Println("[HandshakeHandle] Received node info:", nodeInfo)
 
 	// Parse received data into AppendEntriesResult
 	handshake := protocol.NewHandshake()
@@ -59,8 +58,8 @@ func HandshakeHandle(conn net.Conn, myNode *Node, length int) error {
 
 	myNode.AddNode(handshake.RPCListenPort, conn)
 
-	fmt.Println("GetALLRPCListenAddresses: ", myNode.ALLNode.GetALLRPCListenAddresses())
-	fmt.Println("Addresses: ", myNode.ALLNode.Conns)
+	//fmt.Println("GetALLRPCListenAddresses: ", myNode.ALLNode.GetALLRPCListenAddresses())
+	//fmt.Println("Addresses: ", myNode.ALLNode.Conns)
 
 	handshakeResult := protocol.NewHandshakeResult()
 	handshakeResult = &protocol.HandshakeResult{
@@ -91,8 +90,8 @@ func HandshakeHandleResult(conn net.Conn, myNode *Node, length int) error {
 		return err
 	}
 
-	nodeInfo := string(buf[:n])
-	log.Println("[HandshakeHandleResult] Received node info:", nodeInfo)
+	//nodeInfo := string(buf[:n])
+	//log.Println("[HandshakeHandleResult] Received node info:", nodeInfo)
 
 	// Parse received data into AppendEntriesResult
 	handshakeResult := protocol.NewHandshakeResult()
@@ -111,9 +110,9 @@ func HandshakeHandleResult(conn net.Conn, myNode *Node, length int) error {
 		//fmt.Println("GETADDRESS : ", addr)
 
 		if addr != "" && addr != "127.0.0.1"+myNode.RPCListenPort && myNode.ALLNode.Get(addr) == nil {
-			fmt.Println("GetALLRPCListenAddresses: ", myNode.ALLNode.GetALLRPCListenAddresses())
-			fmt.Println("Addresses: ", myNode.ALLNode.Conns)
-			fmt.Println("CONNECT TO : ", addr)
+			//fmt.Println("GetALLRPCListenAddresses: ", myNode.ALLNode.GetALLRPCListenAddresses())
+			//fmt.Println("Addresses: ", myNode.ALLNode.Conns)
+			//fmt.Println("CONNECT TO : ", addr)
 
 			newConn, err := connectToAddress(addr)
 			if err != nil {

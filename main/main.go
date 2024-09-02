@@ -30,7 +30,7 @@ func main() {
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)
 
-	go termWatcher()
+	//go termWatcher()
 
 	var sleep chan bool
 	<-sleep
@@ -86,6 +86,6 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	myNode.Log.AddLog(myNode.CurrentTerm, command)
+	myNode.AddLogEntry(command)
 	fmt.Fprintf(w, "Log added: %s", command)
 }

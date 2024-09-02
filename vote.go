@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
-	"math/rand"
 	"net"
-	"time"
 )
 
 // 创建一个用于收集投票结果的通道
@@ -21,13 +19,9 @@ type voteRequest struct {
 // 创建一个用于作为follower接收到竞选请求时，抑制成为candidate的通道
 var receivedVoteRequest = make(chan voteRequest)
 
-// 生成介于 min 和 max 微秒之间的随机持续时间的辅助函数
-func randomDuration(min, max int) time.Duration {
-	return time.Duration(rand.Intn(max-min+1)+min) * time.Microsecond * 1000
-}
-
 func StartElection(ctx context.Context, myNode *Node) {
 	var cancel context.CancelFunc
+	myNode.ResetElectionTimer()
 
 	for {
 		select {
@@ -44,7 +38,7 @@ func StartElection(ctx context.Context, myNode *Node) {
 			case FOLLOWER:
 				myNode.Status = CANDIDATE
 				myNode.TermAddOne()
-				fmt.Printf("节点转为 Candidate, 当前term: %v\n", myNode.CurrentTerm)
+				//fmt.Printf("节点转为 Candidate, 当前term: %v\n", myNode.CurrentTerm)
 				myNode.ResetElectionTimer()
 
 				var timerCtx context.Context
@@ -67,13 +61,13 @@ func StartElection(ctx context.Context, myNode *Node) {
 			if myNode.Status == LEADER || myNode.Status == CANDIDATE {
 				if myNode.CurrentTerm < heartbeat.Term {
 					myNode.Status = FOLLOWER
-					myNode.CurrentLeader = myNode.ALLNode.GetRPCListenAddress(heartbeat.address) // 更新Leader
+					myNode.CurrentLeader = heartbeat.address // 更新Leader
 					fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 				}
 			}
-			if myNode.CurrentTerm < heartbeat.Term {
+			if myNode.CurrentTerm <= heartbeat.Term || myNode.CurrentLeader != heartbeat.address {
 				myNode.UpdateTerm(heartbeat.Term)
-				myNode.CurrentLeader = myNode.ALLNode.GetRPCListenAddress(heartbeat.address) // 更新Leader
+				myNode.CurrentLeader = heartbeat.address // 更新Leader
 			}
 			myNode.ResetElectionTimer()
 		case candidateVoteRequest := <-receivedVoteRequest:
@@ -82,13 +76,13 @@ func StartElection(ctx context.Context, myNode *Node) {
 			} else if myNode.Status == CANDIDATE && candidateVoteRequest.Term > myNode.CurrentTerm {
 				myNode.ResetElectionTimer()
 				myNode.Status = FOLLOWER
-				myNode.CurrentLeader = myNode.ALLNode.GetRPCListenAddress(candidateVoteRequest.address) // 更新Leader
-				fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
+				myNode.CurrentLeader = candidateVoteRequest.address // 更新Leader
+				//fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 			} else if myNode.Status == LEADER && candidateVoteRequest.Term > myNode.CurrentTerm {
 				myNode.ResetElectionTimer()
 				myNode.Status = FOLLOWER
-				myNode.CurrentLeader = myNode.ALLNode.GetRPCListenAddress(candidateVoteRequest.address) // 更新Leader
-				fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
+				myNode.CurrentLeader = candidateVoteRequest.address // 更新Leader
+				//fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 			}
 		}
 	}
@@ -166,7 +160,7 @@ func RequestVoteHandle(conn net.Conn, myNode *Node, length int) {
 	err = request.UNMarshal(resup)
 	if err != nil {
 		log.Println("[RequestVoteHandle] Error unmarshaling data:", err)
-		log.Println(string(resup))
+		//log.Println(string(resup))
 		return
 	}
 
@@ -189,8 +183,8 @@ func RequestVoteHandle(conn net.Conn, myNode *Node, length int) {
 
 		if request.LastLogTerm > lastTerm || (request.LastLogTerm == lastTerm && request.LastLogIndex >= lastIndex) {
 			res.VoteGranted = true
-			myNode.CurrentLeader = myNode.ALLNode.GetRPCListenAddress(conn.RemoteAddr().String()) // 更新Leader
-			fmt.Printf("VoteGranted to : %v\n", myNode.CurrentLeader)
+			myNode.CurrentLeader = conn.RemoteAddr().String() // 更新Leader
+			//fmt.Printf("VoteGranted to : %v\n", myNode.CurrentLeader)
 
 			err = myNode.SetVoteFor(conn)
 			if err != nil {
@@ -238,16 +232,16 @@ func RequestVoteResultHandle(conn net.Conn, myNode *Node, length int) {
 
 	// Process the result (e.g., update leader's term, handle success/failure)
 	if result.VoteGranted {
-		fmt.Println("[RequestVoteResultHandle] Received successful RequestVoteResult")
+		//fmt.Println("[RequestVoteResultHandle] Received successful RequestVoteResult")
 		voteAccept <- true
 
 	} else {
-		fmt.Println("[RequestVoteResultHandle] Received failed RequestVoteResult")
+		//fmt.Println("[RequestVoteResultHandle] Received failed RequestVoteResult")
 		if result.Term > myNode.CurrentTerm {
 			// 存在term比自己大的节点
 			// 放弃竞选
 			myNode.Status = FOLLOWER
-			fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
+			//fmt.Printf("节点转为 Follower, 当前term: %v\n", myNode.CurrentTerm)
 			return
 		}
 

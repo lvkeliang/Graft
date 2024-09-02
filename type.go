@@ -3,7 +3,6 @@ package Graft
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/lvkeliang/Graft/LogEntry"
 	"github.com/lvkeliang/Graft/matchIndex"
 	"github.com/lvkeliang/Graft/nextIndex"
@@ -90,21 +89,22 @@ func (pool *NodesPool) GetALLRPCListenAddresses() []string {
 }
 
 type Node struct {
-	Mu            sync.Mutex
-	RPCListenPort string
-	Status        StateOfNode
-	CurrentTerm   int64
-	CurrentLeader string
-	VoteFor       string
-	Log           *LogEntry.Log
-	CommitIndex   int64
-	LastApplied   int64
-	NextIndex     *nextIndex.NextIndex
-	MatchIndex    *matchIndex.MatchIndex
-	ElectionTimer *time.Timer
-	ALLNode       *NodesPool
-	filePath      string
-	StateMachine  stateMachine.StateMachine
+	Mu                 sync.Mutex
+	RPCListenPort      string
+	Status             StateOfNode
+	CurrentTerm        int64
+	CurrentLeader      string
+	VoteFor            string
+	Log                *LogEntry.Log
+	CommitIndex        int64
+	LastApplied        int64
+	NextIndex          *nextIndex.NextIndex
+	MatchIndex         *matchIndex.MatchIndex
+	ElectionTimer      *time.Timer
+	AppendEntriesTimer *time.Timer
+	ALLNode            *NodesPool
+	filePath           string
+	StateMachine       stateMachine.StateMachine
 }
 
 type PersistentState struct {
@@ -126,16 +126,18 @@ func NewNode(RPCListenPort string, stateFilePath string, logFilePath string, You
 	}
 
 	node := &Node{
-		RPCListenPort: RPCListenPort,
-		Status:        FOLLOWER,
-		CurrentTerm:   0,
-		VoteFor:       "",
-		Log:           logEnt,
-		CommitIndex:   -1,
-		LastApplied:   -1,
-		NextIndex:     nextIndex.NewNextIndex(),
-		MatchIndex:    matchIndex.NewMatchIndex(),
-		ElectionTimer: time.NewTimer(RandomElectionTimeout()),
+		RPCListenPort:      RPCListenPort,
+		Status:             FOLLOWER,
+		CurrentTerm:        0,
+		CurrentLeader:      "",
+		VoteFor:            "",
+		Log:                logEnt,
+		CommitIndex:        -1,
+		LastApplied:        -1,
+		NextIndex:          nextIndex.NewNextIndex(),
+		MatchIndex:         matchIndex.NewMatchIndex(),
+		ElectionTimer:      time.NewTimer(RandomElectionTimeout()),
+		AppendEntriesTimer: time.NewTimer(AppendEntriesTimeout()),
 		ALLNode: &NodesPool{
 			Conns: make(map[string]nodeConn),
 		},
@@ -151,15 +153,28 @@ func NewNode(RPCListenPort string, stateFilePath string, logFilePath string, You
 	return node
 }
 
+// ResetAppendEntriesTimer resets the AppendEntries timer.
+func (node *Node) ResetAppendEntriesTimer() {
+	node.AppendEntriesTimer.Stop()
+	node.AppendEntriesTimer.Reset(AppendEntriesTimeout())
+}
+
 // ResetElectionTimer resets the election timer.
 func (node *Node) ResetElectionTimer() {
 	node.ElectionTimer.Stop()
 	node.ElectionTimer.Reset(RandomElectionTimeout())
 }
 
+// AppendEntriesTimeout generates a random election timeout duration.
+func AppendEntriesTimeout() time.Duration {
+	//return time.Duration(5000+rand.Intn(1500)) * time.Millisecond
+	return 70 * time.Millisecond
+}
+
 // RandomElectionTimeout generates a random election timeout duration.
 func RandomElectionTimeout() time.Duration {
-	return time.Duration(5000+rand.Intn(1500)) * time.Millisecond
+	//return time.Duration(5000+rand.Intn(1500)) * time.Millisecond
+	return time.Duration(150+rand.Intn(150)) * time.Millisecond
 }
 
 func (node *Node) AddNode(RPCListenPort string, conn net.Conn) {
@@ -224,8 +239,6 @@ func (node *Node) UpdateCommitIndex() {
 	// Find the majority match index (the middle value in the sorted list)
 	quorumIndex := indexes[len(indexes)/2]
 
-	fmt.Println("quorumIndex :", quorumIndex)
-
 	if quorumIndex < 0 {
 		return
 	}
@@ -251,17 +264,15 @@ func (node *Node) applyLogEntries() {
 	for node.LastApplied < node.CommitIndex {
 		node.LastApplied++
 
-		log.Println("LastApplied: ", node.LastApplied)
+		//log.Println("LastApplied: ", node.LastApplied)
 		entry, err := node.Log.Get(node.LastApplied)
 		if err != nil {
 			log.Printf("[applyLogEntries] failed to get log entry: %v | with CommitIndex : %v | with LastApplied : %v\n", err, node.CommitIndex, node.LastApplied)
 			return
 		}
 
-		log.Printf("--------------------1-----------------------")
-		result := node.StateMachine.ToApply(entry.Command)
-		fmt.Println("--------------------2-----------------------")
-		log.Printf("[applyLogEntries] Applied command '%s' with result '%s'", entry.Command, result)
+		node.StateMachine.ToApply(entry.Command)
+		// log.Printf("[applyLogEntries] Applied command '%s' with result '%s'", entry.Command, result)
 		node.persist()
 	}
 }
@@ -328,5 +339,22 @@ func (node *Node) load() error {
 	node.CommitIndex = state.CommitIndex
 	node.LastApplied = state.LastApplied
 
+	return nil
+}
+
+func (node *Node) AddLogEntry(command string) error {
+	node.Mu.Lock()
+	defer node.Mu.Unlock()
+
+	if node.Status == LEADER {
+		node.Log.AddLog(node.CurrentTerm, command)
+	} else {
+		// 非Leader节点将日志条目转发给Leader
+		if err := ForwardLogEntry(node, command); err != nil {
+			log.Printf("[AddLogEntry] Failed to forward log entry to leader: %v\n", err)
+			log.Printf("[AddLogEntry] leader: %v with pool: %v\n", node.CurrentLeader, node.ALLNode.Conns)
+			return err
+		}
+	}
 	return nil
 }

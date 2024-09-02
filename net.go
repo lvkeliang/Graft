@@ -3,6 +3,8 @@ package Graft
 import (
 	"context"
 	"errors"
+	"github.com/lvkeliang/Graft/LogEntry"
+	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
 )
@@ -58,6 +60,50 @@ func (node *Node) StartServer() error {
 			go Handle(conn, node)
 		}
 	}()
+
+	return nil
+}
+
+func (node *Node) forwardLogToLeader(command string) error {
+	if node.CurrentLeader == "" {
+		return errors.New("[forwardLogToLeader] no leader available")
+	}
+
+	conn := node.ALLNode.Get(node.CurrentLeader)
+	if conn == nil {
+		return errors.New("[forwardLogToLeader] failed to connect to leader")
+	}
+
+	appendEntries := protocol.NewAppendEntries()
+	appendEntries.Term = node.CurrentTerm
+	appendEntries.LeaderID = node.CurrentLeader
+	appendEntries.LeaderCommit = node.CommitIndex
+
+	lastLogEntry := node.Log.GetLastEntry()
+	if lastLogEntry != nil {
+		appendEntries.PrevLogIndex = lastLogEntry.Index
+		appendEntries.PrevLogTerm = lastLogEntry.Term
+	} else {
+		appendEntries.PrevLogIndex = -1
+		appendEntries.PrevLogTerm = -1
+	}
+
+	newLogEntry := LogEntry.LogEntry{
+		Term:    node.CurrentTerm,
+		Command: command,
+	}
+	appendEntries.Entries = []LogEntry.LogEntry{newLogEntry}
+
+	marshalAE, err := appendEntries.Marshal()
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(marshalAE)
+	if err != nil {
+		node.RemoveNode(conn)
+		return err
+	}
 
 	return nil
 }

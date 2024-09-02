@@ -52,6 +52,8 @@ func Handle(conn net.Conn, myNode *Node) {
 			RequestVoteHandle(conn, myNode, length)
 		case protocol.RequestVoteResultMark:
 			RequestVoteResultHandle(conn, myNode, length)
+		case protocol.LogForwardMark:
+			LogForwardHandle(conn, myNode, length)
 		default:
 			log.Println("[Handle] Unknown message type:", msgType)
 			// 遗弃接下来的消息
