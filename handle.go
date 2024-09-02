@@ -1,7 +1,6 @@
 package Graft
 
 import (
-	"fmt"
 	"github.com/lvkeliang/Graft/protocol"
 	"log"
 	"net"
@@ -47,16 +46,12 @@ func Handle(conn net.Conn, myNode *Node) {
 		case protocol.AppendEntriesMark:
 			// Handle AppendEntries message
 			AppendEntriesHandle(conn, myNode, length)
-			fmt.Println("消息类型：1")
 		case protocol.AppendEntriesResultMark:
 			AppendEntriesResultHandle(conn, myNode, length)
-			fmt.Println("消息类型：2")
 		case protocol.RequestVoteMark:
 			RequestVoteHandle(conn, myNode, length)
-			fmt.Println("消息类型：3")
 		case protocol.RequestVoteResultMark:
 			RequestVoteResultHandle(conn, myNode, length)
-			fmt.Println("消息类型：4")
 		default:
 			log.Println("[Handle] Unknown message type:", msgType)
 			// 遗弃接下来的消息

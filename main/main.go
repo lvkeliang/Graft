@@ -25,7 +25,7 @@ func main() {
 	}
 
 	// 初始化节点
-	myNode.Connect([]string{"localhost:254"})
+	myNode.Connect([]string{"localhost:256"})
 
 	// 启动HTTP服务器
 	go startHTTPServer(":" + HTTPPort)
@@ -45,7 +45,7 @@ func termWatcher() {
 		case <-ticker.C:
 			if myNode.CurrentTerm != watcher {
 				watcher = myNode.CurrentTerm
-				log.Printf("[TermWatcher] %v with nodesPool: %v\n", watcher, myNode.ALLNode.Conns)
+				log.Printf("[TermWatcher] %v with nodesPool: %v | leaderNow: %v\n", watcher, myNode.ALLNode.Conns, myNode.CurrentLeader)
 			}
 		}
 	}

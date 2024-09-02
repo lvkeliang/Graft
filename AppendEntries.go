@@ -9,8 +9,13 @@ import (
 	"time"
 )
 
+type leaderHeartbeat struct {
+	address string
+	Term    int64
+}
+
 // 用于将收到的leaderHeartbeat传递给vote相关
-var leaderHeartbeat = make(chan int64)
+var leaderHeartbeatChan = make(chan leaderHeartbeat)
 
 func StartAppendEntries(ctx context.Context, myNode *Node) {
 	ticker := time.NewTicker(5000 * time.Millisecond)
@@ -125,7 +130,10 @@ func AppendEntriesHandle(conn net.Conn, myNode *Node, length int) {
 
 	// 将收到的leaderHeartbeat传递给vote相关
 	// 更新自己的term到leader的term
-	leaderHeartbeat <- appendEntries.Term
+	leaderHeartbeatChan <- leaderHeartbeat{
+		address: conn.RemoteAddr().String(),
+		Term:    appendEntries.Term,
+	}
 	//fmt.Printf("[AppendEntriesHandle] leader term: %v\n", appendEntries.Term)
 
 	res := protocol.NewAppendEntriesResult()

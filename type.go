@@ -94,6 +94,7 @@ type Node struct {
 	RPCListenPort string
 	Status        StateOfNode
 	CurrentTerm   int64
+	CurrentLeader string
 	VoteFor       string
 	Log           *LogEntry.Log
 	CommitIndex   int64
